@@ -1,0 +1,7 @@
+# produits par source/build.sh
+source/TOTO.BIN
+source/TOTO.fd
+source/toto.lst
+source/toto_data.asm
+source/toto_niveau.json
+__pycache__/
