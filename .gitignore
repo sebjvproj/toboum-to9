@@ -1,7 +1,7 @@
 # produits par source/build.sh
-source/TOTO.BIN
-source/TOTO.fd
-source/toto.lst
-source/toto_data.asm
-source/toto_niveau.json
+source/TOBOUM.BIN
+source/TOBOUM.fd
+source/toboum.lst
+source/toboum_data.asm
+source/toboum_niveau.json
 __pycache__/

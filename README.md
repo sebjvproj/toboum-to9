@@ -1,4 +1,4 @@
-# TOTO — jeu de plates-formes pour Thomson TO9
+# TOboum — jeu de plates-formes pour Thomson TO9
 
 Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs, et testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
 
@@ -7,15 +7,15 @@ Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque ni
 Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropic) : moteur 6809, sprites, outils, simulateur et tests. Les décors ont été générés par un modèle d'image à partir de descriptions en texte ([graphismes/PROMPTS.md](graphismes/PROMPTS.md)), puis convertis pour le TO9.
 *Entirely vibe-coded with Claude.*
 
-![En jeu](apercus/toto_jeu.png)
+![En jeu](apercus/toboum.gif)
 
-> Nom de travail, version en cours de développement.
+> Version en cours de développement.
 
 ## Jouer
 
-1. Construisez la disquette (voir plus bas) : vous obtenez `source/TOTO.fd`.
-2. Dans DCMOTO, choisissez la machine **TO9**, puis chargez `TOTO.fd`.
-3. Dans le menu du TO9, choisissez **3 - BASIC 128**, puis tapez `RUN"TOTO"`.
+1. Construisez la disquette (voir plus bas) : vous obtenez `source/TOBOUM.fd`.
+2. Dans DCMOTO, choisissez la machine **TO9**, puis chargez `TOBOUM.fd`.
+3. Dans le menu du TO9, choisissez **3 - BASIC 128**, puis tapez `RUN"TOBOUM"`.
 
 | Touche | Effet |
 |---|---|
@@ -43,7 +43,7 @@ Il faut `python3`, [Pillow](https://pypi.org/project/pillow/) et `lwasm` ([lwtoo
 
 ```sh
 cd source
-sh build.sh            # -> TOTO.BIN et TOTO.fd (décor : egypte)
+sh build.sh            # -> TOBOUM.BIN et TOBOUM.fd (décor : egypte)
 sh build.sh paris      # autre décor : egypte, rome, moscou, paris, mont_st_michel
 ```
 
@@ -54,9 +54,9 @@ Le dossier `test/` contient un simulateur TO9 (`to9sim.py`, avec le paquet [MC68
 ```sh
 pip install pillow MC6809
 cd test
-python3 test_toto.py        # saut, vol plané, bombes, ennemis, vies, niveaux, fin de partie, 40 s au hasard
+python3 test_jeu.py         # saut, vol plané, bombes, ennemis, vies, niveaux, fin de partie, 40 s au hasard
 python3 scintillement.py    # sprites entiers à l'écran avec 2 à 8 ennemis
-python3 film_toto.py        # petit film -> apercus/toto.gif
+python3 film.py             # petit film -> apercus/toboum.gif
 ```
 
 Mesures dans le simulateur, son compris :
@@ -87,7 +87,7 @@ Pièges rencontrés, utiles pour d'autres projets TO9 :
 
 | Dossier | Contenu |
 |---|---|
-| `source/` | `toto.asm` (le jeu), `moteur.asm` (le moteur de sprites), `donnees.py` (décor, sprites compilés, tables), `make_fd.py` (disquette) |
+| `source/` | `toboum.asm` (le jeu), `moteur.asm` (le moteur de sprites), `donnees.py` (décor, sprites compilés, tables), `make_fd.py` (disquette) |
 | `outils/` | `sprites.py` (les sprites dessinés en lettres), `convertir_decor.py` (image → décor TO9), `lz.py`, `police.py` |
 | `graphismes/` | décors sources, décors convertis, guide pour en générer d'autres |
 | `test/` | simulateur TO9 et tests |

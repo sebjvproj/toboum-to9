@@ -3,7 +3,7 @@
 *  mise à jour sans scintillement calée sur le faisceau, sprites compilés,
 *  effacement par copie du décor, horloge au cycle près (timer 6846).
 *  Le programme qui l'inclut définit : ESIZE, NMAX, BUFA/BUFB, PALETTE, LZ_DECOR_A/B,
-*  ER16, BUFROW et les variables (voir toto.asm).
+*  ER16, BUFROW et les variables (voir toboum.asm).
 ****************************************************************
 ERASEALL
         LDU     #ENTS

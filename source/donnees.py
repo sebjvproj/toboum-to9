@@ -1,4 +1,4 @@
-"""Données du jeu TOTO -> toto_data.asm (matériel original uniquement)
+"""Données du jeu TOboum -> toboum_data.asm (matériel original uniquement)
 Décor + plateformes + textes du panneau (sans les bombes, posées par le programme),
 tables des plateformes et des bombes, chiffres, sprites compilés, routines de copie.
     python3 donnees.py [décor]      (égypte par défaut ; voir graphismes/decors)"""
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     for p in PLATEFORMES: plateforme(px, *p)
     for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
         texte(px, 131, y, t, JAUNE)
-    out = ["* Généré par gen_toto.py - ne pas éditer", f"* décor : {DECOR}"]
+    out = ["* Généré par donnees.py - ne pas éditer", f"* décor : {DECOR}"]
     def db(label, data, per=16):
         if label: out.append(label)
         for i in range(0, len(data), per):
@@ -151,6 +151,6 @@ if __name__ == '__main__':
     for r in range(16): out += [f"        LDD     {r * 40},X", f"        STD     {r * BUF_ROWB},Y"]
     out.append("        RTS")
     out.append(f"BUFROW  EQU     {BUF_ROWB}")
-    open('toto_data.asm', 'w').write("\n".join(out) + "\n")
+    open('toboum_data.asm', 'w').write("\n".join(out) + "\n")
     json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'decor': px},
-              open('toto_niveau.json', 'w'))
+              open('toboum_niveau.json', 'w'))

@@ -1,11 +1,11 @@
-"""Tests du jeu TOTO dans le simulateur TO9 (lancer après source/build.sh)."""
+"""Tests du jeu TOboum dans le simulateur TO9 (lancer après source/build.sh)."""
 import os, sys, json
 HERE = os.path.dirname(os.path.abspath(__file__))
 from to9sim import TO9, sym
 from PIL import Image
 os.chdir(os.path.join(HERE, '..', 'source'))
-S = sym('toto.lst')
-NIV = json.load(open('toto_niveau.json'))
+S = sym('toboum.lst')
+NIV = json.load(open('toboum_niveau.json'))
 fails = []
 def check(ok, msg):
     print(('OK   ' if ok else 'ÉCHEC') + ' ' + msg)
@@ -19,7 +19,7 @@ def pixels(s):
     return [[v for xb in range(40) for v in (A[y*40+xb] >> 4, A[y*40+xb] & 15, B[y*40+xb] >> 4, B[y*40+xb] & 15)]
             for y in range(200)]
 def boot():
-    s = TO9('TOTO.BIN'); s.run_frames(60); return s
+    s = TO9('TOBOUM.BIN'); s.run_frames(60); return s
 def poke(s, lab, v, off=0): s.mem.ram[S[lab] + off] = v & 0xFF
 
 # 1. départ
@@ -109,13 +109,34 @@ check(s.peek(S['LIVES']) == 3 and score(s) == '000000' and s.peek(S['GSTATE']) =
 # 11. stabilité : 40 s de jeu au hasard
 import random
 random.seed(1)
-s = boot(); sp0 = s.cpu.system_stack_pointer.value
+s = boot(); piles = set()
+s.hooks[S['UPDONE']] = lambda sim: piles.add(sim.cpu.system_stack_pointer.value)   # toujours au même endroit
 for i in range(400):
     if random.random() < 0.3: s.hold(random.choice([0x08, 0x09, 0x0B, 0x0B, 0x20]), random.randint(3, 30))
     s.run_frames(5)
-check(abs(s.cpu.system_stack_pointer.value - sp0) < 16 and 0xA000 <= s.cpu.program_counter.value < 0xE000 or s.cpu.program_counter.value >= 0xE800,
-      f"40 s de jeu au hasard : pile {sp0:04X} -> {s.cpu.system_stack_pointer.value:04X}, score {score(s)}, niveau {s.peek(S['LEVELB'])}")
+pc = s.cpu.program_counter.value
+check(piles == {0x9FF0} and (0xA000 <= pc < 0xE000 or pc >= 0xE800),
+      f"40 s de jeu au hasard : pile toujours {sorted(hex(v) for v in piles)} en fin de tour, score {score(s)}, niveau {s.peek(S['LEVELB'])}")
 
+
+# 12. personne ne traverse les plateformes : 1 min, 8 ennemis, Toto piloté au hasard (invincible)
+PL = [(x // 2, (x + w) // 2, y) for x, y, w in NIV['plateformes']]
+def dans_plateforme(p, y):
+    return any(p + 2 >= p0 and p + 1 < p1 and y <= yt + 3 and y + 15 >= yt for p0, p1, yt in PL)
+s = boot(); s.mem.ram[S['NMAXLV']] = 8
+viol = []; vus = [0]
+def controle(sim):
+    for k in range(sim.peek(S['NENN']) + 1):
+        b = E + 16 * k; p, y = sim.peek(b), sim.peek(b + 1)
+        if dans_plateforme(p, y): viol.append((k, sim.peek(b + 11), p, y))
+    vus[0] += 1
+s.hooks[S['UPDONE']] = controle
+random.seed(7)
+for i in range(600):
+    s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 20)
+    if random.random() < 0.3: s.hold(random.choice([0x08, 0x09, 0x0B, 0x0B, 0x20]), random.randint(3, 40))
+    s.run_frames(5)
+check(not viol and s.peek(S['NENN']) == 8, f"1 min avec 8 ennemis : aucun sprite dans une plateforme ({vus[0]} images contrôlées, {len(viol)} fautes {viol[:3]})")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

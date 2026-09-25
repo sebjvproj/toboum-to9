@@ -1,6 +1,6 @@
 # Décors à générer avec un modèle d'image
 
-Ce guide sert à fabriquer les **décors** de TOTO avec un modèle d'image. Donnez-lui **uniquement le texte** ci-dessous, jamais des images tirées d'un jeu existant : les monuments sont libres de droits, les dessins d'autrui ne le sont pas. Les 5 décors actuels (`sources/`) ont été faits ainsi.
+Ce guide sert à fabriquer les **décors** de TOboum avec un modèle d'image. Donnez-lui **uniquement le texte** ci-dessous, jamais des images tirées d'un jeu existant : les monuments sont libres de droits, les dessins d'autrui ne le sont pas. Les 5 décors actuels (`sources/`) ont été faits ainsi.
 
 ## Comment faire
 

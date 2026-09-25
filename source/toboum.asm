@@ -1,5 +1,5 @@
 ****************************************************************
-*  TOTO - jeu de bombes pour Thomson TO9 (nom de travail)
+*  TOboum - jeu de plates-formes pour Thomson TO9
 *  Assembleur 6809, mode 160x200 16 couleurs, matériel original.
 *
 *  Toto à la casquette à hélice ramasse les 18 bombes du niveau (la bombe
@@ -311,6 +311,11 @@ TT3     INC     HXC             ; un pas horizontal tous les 2 tops
         BLT     TT4
         CMPA    #PMAX
         BGT     TT4
+        PSHS    A
+        LDB     1,U
+        JSR     BLOCKED         ; une plateforme sur le côté ?
+        PULS    A
+        BCS     TT4
         STA     ,U
         BRA     TT5
 TT4     CLR     TVX
@@ -494,21 +499,20 @@ HC2     LEAX    3,X
         RTS
 
 * A = paire, B = ligne : C = 1 si les pieds reposent sur le sol ou une plateforme
-SUPPORT STA     CP
-        STB     CY
-        CMPB    #YMAX
+SUPPORT CMPB    #YMAX
         BHS     SU8
+        STA     CP
+        ADDB    #16
+        STB     CYB             ; ligne des pieds
         LDX     #PLATS
-        LDA     #NPLAT
-        STA     CNT
-SU1     JSR     OVERLAP
-        BCC     SU2
-        LDA     CY
-        ADDA    #16
+        LDB     #NPLAT
+SU1     LDA     CYB
         CMPA    2,X
-        BEQ     SU8
+        BNE     SU2
+        JSR     OVERLAP
+        BCS     SU8
 SU2     LEAX    3,X
-        DEC     CNT
+        DECB
         BNE     SU1
         ANDCC   #$FE
         RTS
@@ -527,6 +531,40 @@ OVERLAP LDA     CP
         ORCC    #1
         RTS
 OV9     ANDCC   #$FE
+        RTS
+
+* A = paire, B = ligne : C = 1 si le sprite (4 paires x 16 lignes) touche une plateforme
+* (même chevauchement horizontal que pour se poser : au moins 2 paires). Le test de hauteur,
+* qui écarte presque toutes les plateformes, passe en premier.
+BLOCKED STB     CY
+        ADDB    #15
+        STB     CYB             ; dernière ligne du sprite
+        TFR     A,B
+        ADDA    #2
+        STA     CP2             ; paire + 2
+        INCB
+        STB     CP1             ; paire + 1
+        LDX     #PLATS
+        LDB     #NPLAT
+BK1     LDA     CYB             ; Y + 15 >= dessus
+        CMPA    2,X
+        BLO     BK2
+        LDA     2,X             ; dessus + 3 >= Y
+        ADDA    #3
+        CMPA    CY
+        BLO     BK2
+        LDA     CP2             ; paire + 2 >= début
+        CMPA    ,X
+        BLO     BK2
+        LDA     CP1             ; paire + 1 < fin
+        CMPA    1,X
+        BHS     BK2
+        ORCC    #1
+        RTS
+BK2     LEAX    3,X
+        DECB
+        BNE     BK1
+        ANDCC   #$FE
         RTS
 
 ****************************************************************
@@ -577,30 +615,45 @@ ER2     LDA     12,U
         JMP     HMOVE
 ER9     RTS
 
-* chauve-souris : poursuit Toto
+* chauve-souris : poursuit Toto sans traverser les plateformes ; si une plateforme
+* l'empêche de monter ou descendre vers lui, elle la contourne par le côté (dP)
 E_CHAUV LDA     12,U
         ANDA    SPDMASK
         BNE     EC2
-        LDA     ,U              ; horizontal
+        LDA     ,U              ; horizontal : vers Toto
         CMPA    ENTS
         BEQ     EC2
         BLO     EC1
-        DEC     ,U
-        BRA     EC2
-EC1     INC     ,U
+        DECA
+        BRA     EC1B
+EC1     INCA
+EC1B    PSHS    A
+        LDB     1,U
+        JSR     BLOCKED
+        PULS    A
+        BCS     EC2
+        STA     ,U
 EC2     LDA     12,U
         BITA    #1
         BNE     EC9
-        LDA     1,U             ; vertical
+        LDA     1,U             ; vertical : vers Toto
         CMPA    ENTS+1
         BEQ     EC9
         BLO     EC3
-        DEC     1,U
-        RTS
-EC3     INC     1,U
+        DECA
+        BRA     EC4
+EC3     INCA
+EC4     TFR     A,B
+        PSHS    B
+        LDA     ,U
+        JSR     BLOCKED
+        PULS    B
+        BCS     EC5
+        STB     1,U
 EC9     RTS
+EC5     JMP     HMOVE           ; plateforme au-dessus/au-dessous : on la contourne
 
-* boule : rebondit sur les bords
+* boule : rebondit sur les bords et sur les plateformes
 E_BOULE LDA     12,U
         BITA    #1
         BNE     EB1
@@ -610,11 +663,16 @@ EB1     LDA     1,U
         CMPA    #YMIN
         BLO     EB2
         CMPA    #YMAX
-        BLS     EB3
-EB2     NEG     5,U
-        LDA     1,U
-        ADDA    5,U
-EB3     STA     1,U
+        BHI     EB2
+        TFR     A,B
+        PSHS    B
+        LDA     ,U
+        JSR     BLOCKED
+        PULS    B
+        BCS     EB2
+        STB     1,U
+        RTS
+EB2     NEG     5,U             ; rebond (bord ou plateforme)
         RTS
 
 * nuage : dérive d'un bord à l'autre et descend vers Toto
@@ -630,22 +688,33 @@ EU1     LDA     12,U
         CMPA    ENTS+1
         BEQ     EU9
         BLO     EU2
-        DEC     1,U
-        RTS
-EU2     INC     1,U
+        DECA
+        BRA     EU3
+EU2     INCA
+EU3     TFR     A,B
+        PSHS    B
+        LDA     ,U
+        JSR     BLOCKED
+        PULS    B
+        BCS     EU9
+        STB     1,U
 EU9     RTS
 
-* déplacement horizontal d'une paire (dP), demi-tour sur les bords
+* déplacement horizontal d'une paire (dP), demi-tour sur les bords et les plateformes
 HMOVE   LDA     ,U
         ADDA    4,U
         CMPA    #PMIN
         BLT     HM1
         CMPA    #PMAX
-        BLE     HM2
-HM1     NEG     4,U
-        LDA     ,U
-        ADDA    4,U
-HM2     STA     ,U
+        BGT     HM1
+        PSHS    A
+        LDB     1,U
+        JSR     BLOCKED
+        PULS    A
+        BCS     HM1
+        STA     ,U
+        RTS
+HM1     NEG     4,U             ; demi-tour (sans bouger ce top-ci)
         RTS
 
 * apparition des ennemis : un toutes les 3 s, jusqu'à NMAXLV
@@ -1192,7 +1261,7 @@ ARPEGE  FDB     17146,21602,25690,21602,17146,12845,14418,16184
         FDB     4287,4287,5401,5401,4287,4287,4811,4811
 
         INCLUDE "moteur.asm"
-        INCLUDE "toto_data.asm"
+        INCLUDE "toboum_data.asm"
 ENDCODE
 
         ORG     PATCH+NBOMB*64
@@ -1275,6 +1344,9 @@ LIT     RMB     1
 BSTATE  RMB     NBOMB
 TXP     RMB     1
 TXY     RMB     1
+CYB     RMB     1
+CP1     RMB     1
+CP2     RMB     1
 DGPTR   RMB     2
 VARSEND
 
