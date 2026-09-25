@@ -178,9 +178,15 @@ class TO9:
                         o = l * 40
                         self.beam[l] = (bytes(self.mem.vram[0][o:o + 40]), bytes(self.mem.vram[1][o:o + 40]))
 
+    def _nouvelle_touche(self, f):
+        """comme le moniteur du TO9 : seule la dernière touche enfoncée se répète,
+        une nouvelle touche annule les répétitions à venir de la précédente"""
+        self.keys = {k: v for k, v in self.keys.items() if k <= f}
+
     def hold(self, code, frames):
         """touche maintenue : appui, répétition après 800 ms puis toutes les 70 ms"""
         f0 = self.frame
+        self._nouvelle_touche(f0)
         self.keys[f0] = code
         t = 40
         while t < frames:
@@ -189,6 +195,7 @@ class TO9:
 
     def key(self, code, at=None):
         f = self.frame if at is None else at
+        if at is None: self._nouvelle_touche(f)
         self.keys[f] = code
         self.held_until = max(self.held_until, f + 3)   # frappe brève : ~60 ms
 

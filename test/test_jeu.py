@@ -44,6 +44,11 @@ check(y1 < y0 - 20 and s.peek(S['ONGND']) == 0, f"saut : Toto monte ({y0} -> {y1
 s.run_frames(120)
 check(s.peek(S['ONGND']) == 1 and Y(s) <= y0, f"il retombe et se pose (ligne {Y(s)})")
 
+# 3b. saut en biais au clavier : droite maintenue, puis haut (le clavier ne voit que haut)
+s3 = boot(); s3.hold(0x09, 60); s3.run_frames(20)
+p0 = P(s3); s3.hold(0x0B, 8); s3.run_frames(30)
+check(s3.peek(S['ONGND']) == 0 and P(s3) > p0 + 3 and s3.peek(S['TVX']) == 1, f"saut en biais : droite puis haut, Toto part à droite ({p0} -> {P(s3)})")
+
 # 4. vol plané : touche haut maintenue en retombant = descente lente
 s2 = boot(); s2.hold(0x0B, 200); s2.run_frames(60)
 v = s2.mem.read_word(S['TVY'])

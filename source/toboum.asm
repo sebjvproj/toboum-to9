@@ -297,7 +297,11 @@ TT1     LDA     IN_R
         BRA     TT3
 TT2     TST     ONGND           ; au sol : pas de touche = arrêt ; en l'air : élan conservé
         BEQ     TT2B
-        CLR     TVX
+        TST     IN_U            ; ... sauf si un saut part maintenant : il garde l'élan
+        BEQ     TT2A            ; (le clavier ne voit que la dernière touche : droite
+        TST     JLATCH          ;  maintenue puis haut = saut en biais)
+        BEQ     TT2B
+TT2A    CLR     TVX
 TT2B    TST     IN_D
         BEQ     TT3
         CLR     TVX
