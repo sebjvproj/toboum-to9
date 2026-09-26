@@ -80,10 +80,10 @@ Mesures dans le simulateur, son compris :
 - **Son** : des bruitages (une voix carrée qui glisse) sur le CNA 6 bits de l'extension jeux, calculés sous interruption du timer à 1 000 Hz. Cette même interruption sert d'horloge. Pas de musique pour l'instant.
 - **Saut** : 109 lignes, soit les 2/3 de l'aire de jeu. ↓ tenu double la gravité (saut court, chute rapide), ↑ tenu en descente la divise par 2 (chute lente). Un nouvel appui en l'air remet la vitesse verticale à zéro. Marche : 40 pixels/s.
 - **Logique** : le jeu avance à 50 tops par seconde, quel que soit le nombre d'images affichées.
-- **Décors** : celui du niveau 1 est dans le programme. Les 4 autres (7,5 Ko compressés chacun) sont dans `DECORS.DAT`, écrit en secteurs bruts à partir de la piste 21.
+- **Décors** : les 5 (5 à 7,5 Ko compressés chacun) sont dans `DECORS.DAT`, écrit en secteurs bruts à partir de la piste 21.
   - À chaque niveau, le jeu les lit secteur par secteur avec la routine `DKCO` du moniteur.
   - Il les charge dans la copie de l'aire de jeu, libre à ce moment-là, puis les décompresse à l'écran.
-  - En cas d'erreur de lecture, il garde le décor du niveau 1.
+  - En cas d'erreur de lecture, l'aire de jeu reste vide (fond noir), mais la partie continue.
 
 Pièges rencontrés, utiles pour d'autres projets TO9 :
 

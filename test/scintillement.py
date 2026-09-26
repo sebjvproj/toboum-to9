@@ -19,7 +19,7 @@ NOMS = {'TOTO_M1D': 'TOTO_MARCHE', 'TOTO_M2D': 'TOTO_MARCHE_2', 'TOTO_M1G': '-TO
 GRILLE = {S['SPR_' + lab]: (miroir(SP.grid(n[1:])) if n.startswith('-') else SP.grid(n)) for lab, n in NOMS.items()}
 
 def mesure(n, images=100):
-    s = TO9('TOBOUM.BIN'); s.run_frames(50)
+    s = TO9('TOBOUM.BIN', fd='TOBOUM.fd'); s.run_frames(50)
     s.mem.ram[S['NMAXLV']] = n
     while s.peek(S['NENN']) < n:                    # les ennemis arrivent (Toto invincible)
         s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 10); s.run_frames(10)

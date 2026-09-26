@@ -5,7 +5,7 @@ from to9sim import TO9, sym
 from PIL import Image
 os.chdir(os.path.join(HERE, '..', 'source'))
 S = sym('toboum.lst')
-s = TO9('TOBOUM.BIN'); s.run_frames(50)
+s = TO9('TOBOUM.BIN', fd='TOBOUM.fd'); s.run_frames(50)
 s.beam_on()
 frames = []; iters = []
 def film(n):

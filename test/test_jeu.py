@@ -1,5 +1,5 @@
 """Tests du jeu TOboum dans le simulateur TO9 (lancer après source/build.sh)."""
-import os, sys, json
+import os, sys, json, re
 HERE = os.path.dirname(os.path.abspath(__file__))
 from to9sim import TO9, sym
 from PIL import Image
@@ -174,19 +174,32 @@ def ecart_decor(s, nom):
         if p != 0xFF: hors |= {(yy, xx) for yy in range(y, y + 16) for xx in range(2 * p, 2 * p + 8)}
     return sum(px[y][x] != ref[y][x] for y in range(8, 192) for x in range(8, 124) if (y, x) not in hors)
 ordre = NIV['ordre']
+dectab = [int(v, 16) for v in re.findall(r'\$([0-9A-F]{2})', open('toboum_data.asm').read().split('DECTAB')[1].split('\n*')[0].split('BUFROW')[0])[:2 * len(ordre)]]
+def secteurs(k):                                   # (piste, secteur) du 1er et du dernier secteur du décor k
+    d, n = dectab[2 * k], dectab[2 * k + 1]
+    return (21 + d // 16, d % 16 + 1), (21 + (d + n - 1) // 16, (d + n - 1) % 16 + 1), n
 s = boot()
-check(ecart_decor(s, ordre[0]) == 0 and s.dk_reads == [], f"niveau 1 : {ordre[0]}, sans lecture de disquette")
-finir_niveau(s)
+(p1, s1), (p2, s2), n1 = secteurs(0)
 lu = s.dk_reads
-check(len(lu) == 30 and lu[0][:2] == (21, 1) and lu[-1][:2] == (22, 14), f"niveau 2 : {len(lu)} secteurs lus, pistes {lu[0][:2]} -> {lu[-1][:2]}")
+check(len(lu) == n1 and lu[0][:2] == (p1, s1) and lu[-1][:2] == (p2, s2) and ecart_decor(s, ordre[0]) == 0,
+      f"niveau 1 : {ordre[0]} lu sur la disquette ({len(lu)} secteurs) et affiché au pixel près")
+finir_niveau(s)
+(p1, s1), (p2, s2), n2 = secteurs(1)
+lu = s.dk_reads[n1:]
+check(len(lu) == n2 and lu[0][:2] == (p1, s1) and lu[-1][:2] == (p2, s2), f"niveau 2 : {len(lu)} secteurs lus, pistes {lu[0][:2]} -> {lu[-1][:2]}")
 check(ecart_decor(s, ordre[1]) == 0, f"niveau 2 : décor {ordre[1]} affiché ({ecart_decor(s, ordre[1])} pixels différents)")
 pal_attendue = [tuple(c) for c in json.load(open(f'../graphismes/decors/{ordre[1]}_palette.json'))['niveaux_to9']]
 lv = [round(255 * (v / 15) ** (1 / 2.8)) for v in range(16)]
 check(s.palette_rgb()[:7] == [tuple(lv[c] for c in t) for t in pal_attendue[:7]], "niveau 2 : palette du décor")
 for n in range(3, 7): finir_niveau(s)
 check(s.peek(S['LEVELB']) == 6 and ecart_decor(s, ordre[0]) == 0, f"niveau 6 : retour à {ordre[0]}")
-s = boot(fd=False); finir_niveau(s)
-check(s.peek(S['LEVELB']) == 2 and ecart_decor(s, ordre[0]) == 0, "sans disquette : le niveau 2 garde le 1er décor, sans planter")
+s = boot(fd=False)
+px = pixels(s)
+hors = {(y, x) for bx, by in NIV['bombes'] for y in range(by, by + 16) for x in range(bx, bx + 8)}
+hors |= {(y, x) for y in range(Y(s), Y(s) + 16) for x in range(2 * P(s), 2 * P(s) + 8)}
+vide = sum(px[y][x] != 0 for y in range(8, 192) for x in range(8, 124) if (y, x) not in hors)
+check(s.peek(S['GSTATE']) == 0 and vide == 0 and s.palette_rgb()[15] == tuple(lv[c] for c in pal_attendue[15]),
+      f"sans disquette : fond noir hors bombes et Toto ({vide} pixels), couleurs des sprites, pas de plantage")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

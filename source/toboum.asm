@@ -76,7 +76,7 @@ START   LDB     #$14            ; curseur invisible
         ORCC    #$50
         LDS     #$9FF0
         JSR     INITVARS
-        LDX     #PALETTE        ; décor du niveau 1 : dans le programme
+        LDX     #PALNOIR        ; écran noir jusqu'au premier décor
         STX     PALPTR
         LDA     #$7B
         STA     VMODE
@@ -250,9 +250,9 @@ NL4     STA     SPDMASK
         LDX     #SFX_NIVEAU
         JMP     PLAYSFX
 
-* décor du niveau : n° (niveau - 1) modulo NDECOR ; le 0 est dans le programme, les autres
-* sont lus sur la disquette (DECORS.DAT, secteurs bruts) dans la copie de l'aire de jeu, libre
-* à ce moment-là (SAVEBUF la réécrit ensuite). En cas d'erreur de lecture : décor 0.
+* décor du niveau : n° (niveau - 1) modulo NDECOR, lu sur la disquette (DECORS.DAT, secteurs
+* bruts) dans la copie de l'aire de jeu, libre à ce moment-là (SAVEBUF la réécrit ensuite).
+* En cas d'erreur de lecture : aire de jeu vide (fond noir) et palette de secours.
 CHOOSEDECOR
         LDA     LEVELN
         DECA
@@ -261,7 +261,6 @@ CD1     CMPA    #NDECOR
         SUBA    #NDECOR
         BRA     CD1
 CD2     STA     DECN
-        BEQ     CD8
         JSR     LOADDECOR
         BCS     CD8
         LDX     #BUFA           ; palette (copiée à part : SAVEBUF réécrira cette zone),
@@ -279,20 +278,82 @@ CD3     LDA     ,X+
         ADDD    #BUFA
         STD     LZPB
         RTS
-CD8     LDX     #PALETTE
+CD8     LDX     #PALSECOURS
         STX     NEWPAL
-        LDX     #LZ_DECOR_A
+        LDX     #DECVIDE        ; décor vide : 8000 octets nuls par banque
         STX     LZPA
-        LDX     #LZ_DECOR_B
         STX     LZPB
         RTS
+* « décor » compressé vide : 63 copies de 130 octets + littéraux (UNLZ s'arrête à 8000)
+DECVIDE FCB     $00,$00         ; 1 octet nul
+        FCB     $FF,$00,$01     ; copie de 130 octets à distance 1 (le zéro précédent)...
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
+        FCB     $FF,$00,$01
 
-* lit le décor DECN (1..) : DECTAB donne 1er secteur et nombre de secteurs depuis la piste
+* lit le décor DECN (0..) : DECTAB donne 1er secteur et nombre de secteurs depuis la piste
 * DATTRK secteur 1 ; C = 1 si erreur
 LOADDECOR
         LDX     #DECTAB
         LDA     DECN
-        DECA
         ASLA
         LEAX    A,X
         LDB     1,X

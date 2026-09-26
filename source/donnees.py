@@ -116,17 +116,18 @@ if __name__ == '__main__':
         if label: out.append(label)
         for i in range(0, len(data), per):
             out.append("        FCB " + ",".join(f"${b:02X}" for b in data[i:i + per]))
-    # décor du niveau 1 : dans le programme ; les autres : sur la disquette (DECORS.DAT)
+    # tous les décors sont sur la disquette (DECORS.DAT), un par niveau, dans cet ordre
     ORDRE = [DECOR] + [n for n in TOUS_DECORS if n != DECOR]
     decors_px = {}
-    px, pal, ca, cb = compose(DECOR); decors_px[DECOR] = px
-    out.append(f"* décor du niveau 1 : {DECOR}")
-    db("PALETTE", pal, 8)
-    db("LZ_DECOR_A", ca); db("LZ_DECOR_B", cb)
+    # palette de secours (si la disquette ne se lit pas) : fond noir, couleurs des sprites
+    pal = bytearray(14)
+    for i in range(7, 16):
+        r, g, b = SP.SPRITE_LV[i]; pal += bytes([(g << 4) | r, b])
+    db("PALSECOURS", pal, 8)
     # sur la disquette : par décor, palette (32) + position de la banque B (2) + LZ A + LZ B,
     # à partir d'un début de secteur ; DECTAB = (1er secteur, nombre de secteurs) par décor
     dat = bytearray(); tab = []
-    for nom in ORDRE[1:]:
+    for nom in ORDRE:
         pxd, pal, ca, cb = compose(nom); decors_px[nom] = pxd
         blob = pal + (34 + len(ca)).to_bytes(2, 'big') + ca + cb
         blob += bytes(-len(blob) % 256)
@@ -135,7 +136,7 @@ if __name__ == '__main__':
     open('DECORS.DAT', 'wb').write(dat)
     out.append(f"NDECOR  EQU     {len(ORDRE)}")
     out.append("DATTRK  EQU     21              ; DECORS.DAT commence piste 21 secteur 1 (make_fd.py)")
-    out.append("* décors des niveaux 2, 3... : " + ", ".join(ORDRE[1:]))
+    out.append("* décors des niveaux 1, 2, 3... : " + ", ".join(ORDRE))
     db("DECTAB", tab, 8)
     # plateformes : paire de début, paire de fin (exclue), ligne du dessus
     out.append(f"NPLAT   EQU     {len(PLATEFORMES)}")
