@@ -25,6 +25,8 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 | ↑ de nouveau en l'air | **freiner** : Toto s'arrête un instant ; en tapotant, il plane |
 | ↓ | en l'air : saut court, chute rapide, et arrêt de l'élan |
 | S | bruitages oui / non |
+| G | mode invincible (pour tester) : bord blanc, les ennemis ne font rien ; la partie ne compte pas pour le record |
+| N | en mode invincible : passer au niveau suivant |
 | Manette 1 | directions, bouton = saut |
 
 Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, puis on appuie sur ↑ ; Toto garde son élan en l'air. À la manette, on peut combiner les directions et le bouton.
@@ -34,7 +36,7 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
 - **Saut** : 10 points à chaque décollage.
 - **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante, toujours dans le même ordre : il y a un parcours idéal à trouver. Quand tout est ramassé, on passe au niveau suivant.
 - **Bonus de chaîne** : en fin de niveau, 15 bombes allumées ramassées rapportent 10 000 points, 16 en rapportent 20 000, 17 en rapportent 30 000 et les 18, 50 000 (bord jaune).
-- **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 20, une pièce éclair apparaît au centre. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
+- **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 8, une pièce éclair apparaît (2 ou 3 fois par niveau). La jauge ne monte pas tant que la pièce est affichée ou que le gel dure ; elle continue d'un niveau à l'autre, et une pièce non prise revient au niveau suivant. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
 - **Un décor et une planche par niveau**, en boucle : Égypte (pyramides), Rome (deux corniches), Moscou (escalier), Paris (tour), Mont-Saint-Michel (terrasses). Chaque planche a ses plateformes, ses bombes, son ordre d'allumage et sa pièce éclair.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
   - **La pression monte** : toutes les 10 s passées sur un niveau, les ennemis arrivent un peu plus souvent et les marcheurs accélèrent (6 fois au plus, jusqu'à une apparition toutes les 1,8 s).

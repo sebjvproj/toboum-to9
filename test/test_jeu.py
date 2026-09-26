@@ -283,13 +283,18 @@ check(s.peek(S['CHAIN']) == 18 and s.peek(S['GSTATE']) == 2 and score(s) == '053
 s = boot(); s.mem.ram[S['NMAXLV']] = 3
 while s.peek(S['NENN']) < 3:
     s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 10); s.run_frames(10)
-for n in range(10):
+for n in range(3):
     s.mem.ram[S['INVUL']] = 250
     prendre(s, s.peek(S['LIT']))
-cx, cy = NIV['piece']
-px = pixels(s)
-dessin = sum(px[cy + j][cx + i] != NIV['decor'][cy + j][cx + i] for j in range(12) for i in range(8))
-check(s.peek(S['COINON']) == 1 and dessin > 20 and s.peek(S['PWR']) == 0, f"jauge à 20 (10 bombes allumées) : la pièce éclair apparaît ({dessin} pixels)")
+check(s.peek(S['COINON']) == 0 and s.peek(S['PWR']) == 6, f"3 bombes allumées : jauge à {s.peek(S['PWR'])}, pas encore de pièce")
+s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+def piece_dessinee(s, pl):
+    cx, cy = pl['piece']; px = pixels(s); ref = NIV['decors'][NIV['ordre'][(s.peek(S['LEVELN']) - 1) % 5]]
+    return sum(px[cy + j][cx + i] != ref[cy + j][cx + i] for j in range(12) for i in range(8))
+dessin = piece_dessinee(s, planche(s))
+check(s.peek(S['COINON']) == 1 and dessin > 20 and s.peek(S['PWR']) == 0, f"jauge à 8 (4 bombes allumées) : la pièce éclair apparaît ({dessin} pixels)")
+s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+check(s.peek(S['PWR']) == 0, "tant que la pièce est là, la jauge ne monte pas")
 for k in range(1, s.peek(S['NENN']) + 1):           # ennemis loin de la pièce (en haut) : aucun mangé en la prenant
     s.mem.ram[E + 16 * k] = 8 + 12 * k; s.mem.ram[E + 16 * k + 1] = 8
 sc0 = int(score(s)); s.mem.ram[S['INVUL']] = 0
@@ -339,6 +344,36 @@ for i in range(60): s.mem.ram[S['INVUL']] = 250; s.run_frames(50)
 check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (112, 90, 6), f"après 70 s : plafond (vitesse {s.peek(S['ESPEED'])}, apparitions {s.peek(S['SPDEF'])})")
 finir_niveau(s)
 check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (64, 150, 0), "niveau suivant : on repart du début")
+
+# 18. pièce pas prise en fin de niveau : elle est rendue dès le niveau suivant
+s = boot()
+for n in range(4): s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+check(s.peek(S['COINON']) == 1, "pièce apparue au niveau 1")
+finir_niveau(s)
+dessin = piece_dessinee(s, planche(s))
+check(s.peek(S['LEVELN']) == 2 and s.peek(S['COINON']) == 1 and dessin > 20,
+      f"niveau 2 : la pièce non prise est là d'emblée, à la place prévue par la planche ({dessin} pixels)")
+
+# 19. mode invincible : G (bord blanc, contacts ignorés), N = niveau suivant, pas de record
+s = boot()
+s.key(ord('G')); s.run_frames(5)
+check(s.peek(S['GOD']) == 1 and s.border == 8, f"G : mode invincible, bord blanc ({s.border})")
+s.mem.ram[S['NMAXLV']] = 1
+while s.peek(S['NENN']) < 1: s.run_frames(10)
+for i in range(20):
+    s.mem.ram[S['INVUL']] = 0; s.mem.ram[E + 16] = P(s); s.mem.ram[E + 17] = Y(s); s.run_frames(2)
+check(s.peek(S['GSTATE']) == 0 and s.peek(S['LIVES']) == 3, "un ennemi sur Toto pendant 40 images : rien")
+s.key(ord('n')); s.run_frames(100)
+check(s.peek(S['LEVELN']) == 2 and s.peek(S['GSTATE']) == 0 and s.border == 8, "N : niveau suivant, toujours invincible")
+s.key(ord('g')); s.run_frames(5)
+check(s.peek(S['GOD']) == 0 and s.border == 0, "G de nouveau : mode normal, bord noir")
+s.key(ord('N')); s.run_frames(50)
+check(s.peek(S['LEVELN']) == 2, "N sans le mode invincible : sans effet")
+poke(s, 'LIVES', 1); s.mem.ram[S['SCORE']:S['SCORE'] + 3] = bytes([0, 0x50, 0])
+while s.peek(S['NENN']) < 1: s.run_frames(10)
+s.mem.ram[S['INVUL']] = 0; s.mem.ram[E + 16] = P(s); s.mem.ram[E + 17] = Y(s); s.run_frames(100)
+check(s.peek(S['GSTATE']) == 3 and bytes(s.mem.ram[S['RECORD']:S['RECORD'] + 3]).hex() == '000000',
+      "partie jouée en mode invincible : fin de partie sans record")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

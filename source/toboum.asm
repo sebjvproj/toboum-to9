@@ -66,6 +66,7 @@ RAGESP  EQU     8               ;   marcheurs un peu plus rapides
 RAGEMX  EQU     6               ;   6 fois au plus (au bout d'une minute)
 TRANSF  EQU     75              ; un robot au sol se transforme au bout de 1,5 s,
 TCLIGN  EQU     25              ; après avoir clignoté 0,5 s
+PWRSEUIL EQU    8               ; jauge : la pièce éclair apparaît à 8 (bombe éteinte 1, allumée 2)
 GRAV    EQU     $000E           ; 0,055 ligne/top²
 SAUT    EQU     $0378           ; 3,47 lignes/top au décollage
 CHUTEMX EQU     $0400           ; chute limitée à 4 lignes/top
@@ -137,7 +138,19 @@ RI1     JSR     GETC
         BNE     RI2B
 RI2     JSR     SNDTOGGLE
         BRA     RI3
-RI2B    STB     LASTKEY
+RI2B    CMPB    #'G             ; G : mode invincible oui / non
+        BEQ     RIG
+        CMPB    #'g
+        BNE     RIN
+RIG     JSR     GODTOGGLE
+        BRA     RI3
+RIN     CMPB    #'N             ; N (en mode invincible) : niveau suivant
+        BEQ     RIN2
+        CMPB    #'n
+        BNE     RI2C
+RIN2    JSR     GODSKIP
+        BRA     RI3
+RI2C    STB     LASTKEY
 RI3     LDB     LASTKEY
         CMPB    #$08
         BNE     RI4
@@ -174,6 +187,36 @@ RJ4     LDA     DAC
         INC     IN_U
 RI9     RTS
 
+* mode invincible (pour tester) : bord blanc, contacts ignorés, N = niveau suivant, pas de record
+GODTOGGLE
+        LDA     GOD
+        EORA    #1
+        STA     GOD
+        LDA     #1
+        STA     GODUSED
+        TST     POWER           ; (le bord bleu du gel reste)
+        BNE     GT9
+        TST     GSTATE
+        BNE     GT9
+        JMP     NORMBORD
+GODSKIP TST     GOD
+        BEQ     GT9
+        LDA     GSTATE
+        BNE     GT9
+        LDA     #G_BRAVO
+        STA     GSTATE
+        LDA     #10
+        STA     GTIMER
+GT9     RTS
+* bord normal : noir, ou blanc en mode invincible
+NORMBORD
+        CLR     BORDER
+        TST     GOD
+        BEQ     GT9
+        LDA     #C_BLANC
+        STA     BORDER
+        RTS
+
 * manette présente ? (comme TOetris : le bit 2 du registre de contrôle se relit)
 INITJOY CLR     JOYOK
         LDA     JOYCRA
@@ -199,6 +242,9 @@ NEWGAME JSR     TITLE           ; écran titre, jusqu'à l'appui d'une touche
         LDA     #1
         STA     LEVELB
         STA     LEVELN
+        CLR     PWR             ; jauge et pièce à zéro
+        CLR     COINON
+        CLR     GODUSED
         JMP     NEWLEVEL
 
 * nouveau niveau : décor, bombes (dessinées dans la copie du décor), Toto au départ
@@ -206,7 +252,7 @@ NEWLEVEL
         JSR     SETLAYOUT       ; planche du niveau : plateformes, bombes, départ
         JSR     TOTORESET       ; puis : Toto et ennemis « jamais dessinés »
         CLR     NENN
-        CLR     BORDER
+        JSR     NORMBORD
         LDX     #PALNOIR        ; écran noir pendant la préparation
         STX     PALPTR
         JSR     SETPAL
@@ -260,10 +306,14 @@ NL4     STA     ESPEED
         CLR     RAGE
         CLR     NSPAWN
         CLR     NTRANS
-        CLR     CHAIN           ; chaîne de bombes allumées, jauge, pièce, gel
-        CLR     PWR
-        CLR     POWER
+        CLR     CHAIN           ; chaîne de bombes allumées, gel ; la jauge continue
+        TST     COINON          ; pièce pas prise : elle revient tout de suite au niveau suivant
+        BEQ     NL5
+        LDA     #PWRSEUIL
+        STA     PWR
+NL5     CLR     POWER
         CLR     COINON
+        JSR     COINMAYBE
         LDA     #50
         STA     INVUL
         LDA     #G_JEU
@@ -1130,7 +1180,9 @@ COLLIDE TST     POWER
         BEQ     CO1
         DEC     INVUL
         RTS
-CO1     LDB     NENN
+CO1     TST     GOD             ; mode invincible : les contacts ne comptent pas
+        BNE     CO9
+        LDB     NENN
         BEQ     CO9
         LDU     #ENTS+ESIZE
 CO2     LDA     ,U
@@ -1181,11 +1233,13 @@ AD1     JSR     ERASEALL        ; on efface tout le monde et on repart
         STA     INVUL
         LDA     #G_JEU
         STA     GSTATE
-        CLR     BORDER
-        RTS
+        JMP     NORMBORD
 
 RECORDCHK
-        LDD     SCORE
+        TST     GODUSED         ; partie jouée en mode invincible : pas de record
+        BEQ     RCG
+        RTS
+RCG     LDD     SCORE
         CMPD    RECORD
         BHI     RC1
         BLO     RC9
@@ -1238,15 +1292,16 @@ TAKEBOMB
         BEQ     TB1
         LDX     #PTS100         ; bombe éteinte : 100, jauge +1
         JSR     ADDSCORE
-        INC     PWR
+        LDA     #1
+        JSR     GAUGE
         LDX     #SFX_BOMBE
         JSR     PLAYSFX
         BRA     TB5
 TB1     LDX     #PTS200         ; bombe allumée : 200, chaîne +1, jauge +2, la suivante s'allume
         JSR     ADDSCORE
         INC     CHAIN
-        INC     PWR
-        INC     PWR
+        LDA     #2
+        JSR     GAUGE
         LDX     #SFX_ALLUMEE
         JSR     PLAYSFX
         TST     BLEFT
@@ -1290,14 +1345,23 @@ CHAINBONUS
 CB9     RTS
 BONUSTAB FCB    $01,$00,$00,$02,$00,$00,$03,$00,$00,$05,$00,$00
 
-* jauge : à 20, la pièce éclair apparaît au centre (si elle n'est pas déjà là)
+* jauge + A, sauf quand la pièce est déjà là ou pendant le gel (sinon elle reviendrait aussitôt)
+GAUGE   TST     COINON
+        BNE     GA9
+        TST     POWER
+        BNE     GA9
+        ADDA    PWR
+        STA     PWR
+GA9     RTS
+
+* jauge pleine : la pièce éclair apparaît (si elle n'est pas déjà là)
 COINMAYBE
         TST     COINON
         BNE     CM9
         TST     POWER
         BNE     CM9
         LDA     PWR
-        CMPA    #20
+        CMPA    #PWRSEUIL
         BLO     CM9
         CLR     PWR
         INC     COINON
@@ -1351,7 +1415,7 @@ POWERTICK
 PW8     JSR     NORMIMGS        ; fin du gel : les ennemis repartent, courte grâce
         LDA     #30
         STA     INVUL
-        CLR     BORDER
+        JMP     NORMBORD
 PW9     RTS
 
 * images des ennemis : glaçon, ou les images de leur type
@@ -1842,7 +1906,9 @@ BLEFT   RMB     1
 LIT     RMB     1
 BSTATE  RMB     NBOMB
 CHAIN   RMB     1               ; bombes allumées ramassées dans ce niveau
-PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à 20)
+PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à PWRSEUIL)
+GOD     RMB     1               ; mode invincible
+GODUSED RMB     1               ; ... utilisé pendant cette partie (pas de record)
 COINON  RMB     1               ; pièce éclair présente
 POWER   RMB     1               ; gel en cours (tops restants)
 EATCNT  RMB     1               ; glaçons mangés pendant ce gel
