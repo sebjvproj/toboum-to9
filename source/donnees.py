@@ -90,6 +90,47 @@ def texte(px, x, y, t, c):
                     px[y + 2 * r][x + k] = c; px[y + 2 * r + 1][x + k] = c
         x += 4
 
+def centre(t): return (160 - (4 * len(t) - 1)) // 2
+
+# écran titre : image plein écran (graphismes/decors/titre, convertie avec --plein-ecran),
+# logo, sprites, bandeau de textes ; le record est écrit par le jeu en (paire TRECP, ligne TRECY)
+TRECP, TRECY = 35, 158
+def ecran_titre():
+    px, lv = charge_decor('titre')
+    K, W, Y, R = SP.CODE['k'], BLANC, JAUNE, SP.CODE['r']
+    for y in range(140, 200): px[y] = [0] * 160                  # bandeau noir
+    for x in range(160): px[140][x] = SP.CODE['g']
+    # logo : lettres 5x5 agrandies (4 x 8), contour noir, ombre rouge, dégradé jaune -> orange
+    LOGO = {'T': '11111 00100 00100 00100 00100', 'O': '01110 10001 10001 10001 01110',
+            'B': '11110 10001 11110 10001 11110', 'U': '10001 10001 10001 10001 01110',
+            'M': '10001 11011 10101 10001 10001'}
+    mot, sx, sy = 'TOBOUM', 4, 8
+    x0, y0 = (160 - (len(mot) * 6 - 1) * sx) // 2, 16
+    plein = set()
+    for n, ch in enumerate(mot):
+        for r, ligne in enumerate(LOGO[ch].split()):
+            for k, v in enumerate(ligne):
+                if v == '1':
+                    plein |= {(y0 + r * sy + j, x0 + (6 * n + k) * sx + i) for j in range(sy) for i in range(sx)}
+    ombre = {(y + 3, x + 2) for y, x in plein}
+    for y, x in {(y + dy, x + dx) for y, x in plein | ombre for dy in (-1, 0, 1) for dx in (-1, 0, 1)}: px[y][x] = K
+    for y, x in ombre: px[y][x] = R
+    for y, x in plein: px[y][x] = W if y == y0 else Y if y - y0 < 3 * sy else SP.CODE['o']
+    # Toto (x2) au milieu des bombes
+    def pose(nom, x, y, z=1):
+        for j, r in enumerate(SP.grid(nom)):
+            for i, v in enumerate(r):
+                if v:
+                    for a in range(z):
+                        for b in range(z): px[y + z * j + a][x + z * i + b] = v
+    pose('TOTO_VOL', 72, 80, 2)
+    for nom, x, y in (('BOMBE', 24, 84), ('BOMBE', 40, 104), ('BOMBE_ALLUMEE', 108, 90), ('BOMBE', 128, 110)):
+        pose(nom, x, y)
+    texte(px, 2 * TRECP, 146, 'RECORD', Y)
+    for t, y, c in (('APPUIE SUR UNE TOUCHE', 174, W), ('FLECHES : BOUGER - ESPACE : SAUTER', 187, SP.CODE['l'])):
+        texte(px, centre(t), y, t, c)
+    return px, lv
+
 # sprites compilés : chaque image devient 4 routines (2 banques x 2 moitiés de 8 lignes)
 # X = adresse écran de la 1re paire de la banque ; X est rendu intact
 def compile_moitie(label, g, pairs, lignes, stride=40):
@@ -138,10 +179,12 @@ if __name__ == '__main__':
     os.chdir(HERE)
     def compose(nom, pl):
         """décor + plateformes de la planche + textes du panneau -> (pixels, palette, LZ A, LZ B)"""
-        px, lv = charge_decor(nom)
-        for p in pl['plats']: plateforme(px, *p)
-        for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
-            texte(px, 131, y, t, JAUNE)
+        if pl is None: px, lv = ecran_titre()
+        else:
+            px, lv = charge_decor(nom)
+            for p in pl['plats']: plateforme(px, *p)
+            for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
+                texte(px, 131, y, t, JAUNE)
         pal = bytearray()
         for r, g, b in lv: pal += bytes([(g << 4) | r, b])
         A = bytearray(); B = bytearray()
@@ -168,15 +211,18 @@ if __name__ == '__main__':
     # sur la disquette : par décor, palette (32) + position de la banque B (2) + LZ A + LZ B,
     # à partir d'un début de secteur ; DECTAB = (1er secteur, nombre de secteurs) par décor
     dat = bytearray(); tab = []
-    for k, nom in enumerate(ORDRE):
-        verifie(PLANCHES[k])
-        pxd, pal, ca, cb = compose(nom, PLANCHES[k]); decors_px[nom] = pxd
+    for k, nom in enumerate(ORDRE + ['titre']):                  # l'écran titre en dernier
+        pl = PLANCHES[k] if k < len(ORDRE) else None
+        if pl: verifie(pl)
+        pxd, pal, ca, cb = compose(nom, pl); decors_px[nom] = pxd
         blob = pal + (34 + len(ca)).to_bytes(2, 'big') + ca + cb
         blob += bytes(-len(blob) % 256)
         tab += [len(dat) // 256, len(blob) // 256]; dat += blob
     assert len(dat) // 256 < 256 and max(tab[1::2]) * 256 <= 10672, 'un décor doit tenir dans la copie de l\'aire de jeu'
     open('DECORS.DAT', 'wb').write(dat)
-    out.append(f"NDECOR  EQU     {len(ORDRE)}")
+    out.append(f"NDECOR  EQU     {len(ORDRE)}              ; (+ l'écran titre, bloc n° NDECOR)")
+    out.append(f"TRECP   EQU     {TRECP}              ; record sur l'écran titre")
+    out.append(f"TRECY   EQU     {TRECY}")
     out.append("DATTRK  EQU     21              ; DECORS.DAT commence piste 21 secteur 1 (make_fd.py)")
     out.append("* décors des niveaux 1, 2, 3... : " + ", ".join(ORDRE))
     db("DECTAB", tab, 8)

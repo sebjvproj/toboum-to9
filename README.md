@@ -16,6 +16,7 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 1. Construisez la disquette (voir plus bas) : vous obtenez `source/TOBOUM.fd`.
 2. Dans DCMOTO, choisissez la machine **TO9**, puis chargez `TOBOUM.fd`.
 3. Dans le menu du TO9, choisissez **3 - BASIC 128**, puis tapez `RUN"TOBOUM"`.
+4. L'écran titre affiche le record : appuyez sur une touche (ou le bouton de la manette) pour jouer.
 
 | Touche | Effet |
 |---|---|
@@ -41,7 +42,7 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
   - la **chauve-souris** poursuit Toto ;
   - la **boule** rebondit ;
   - le **nuage** dérive et descend vers Toto.
-- **Vies** : un contact coûte une vie, sur 3 au total. À la fin de la partie, le bord devient rouge, le record est gardé, et une nouvelle partie démarre.
+- **Vies** : un contact coûte une vie, sur 3 au total. À la fin de la partie, le bord devient rouge, le record est gardé, puis on revient à l'écran titre.
 
 ## Construire
 
@@ -63,7 +64,7 @@ cd test
 python3 test_jeu.py         # saut, vol plané, bombes, ennemis, vies, niveaux, fin de partie, 40 s au hasard
 python3 scintillement.py    # sprites entiers à l'écran avec 2 à 8 ennemis
 python3 film.py             # petit film -> apercus/toboum.gif
-python3 niveaux.py          # les 5 niveaux -> apercus/niveaux.png
+python3 niveaux.py          # l'écran titre et les 5 niveaux -> apercus/titre.png, niveaux.png
 ```
 
 Mesures dans le simulateur, son compris :
@@ -101,9 +102,11 @@ Pièges rencontrés, utiles pour d'autres projets TO9 :
 |---|---|
 | `source/` | `toboum.asm` (le jeu), `moteur.asm` (le moteur de sprites), `donnees.py` (décors, planches, sprites compilés, tables), `make_fd.py` (disquette) |
 | `outils/` | `sprites.py` (les sprites dessinés en lettres), `convertir_decor.py` (image → décor TO9), `lz.py`, `police.py` |
-| `graphismes/` | décors sources, décors convertis, guide pour en générer d'autres |
+| `graphismes/` | décors sources, décors convertis (dont `titre`, converti avec `--plein-ecran`), guide pour en générer d'autres |
 | `test/` | simulateur TO9 et tests |
 | `apercus/` | captures, planche des sprites, film |
+
+![Écran titre](apercus/titre.png)
 
 ![Sprites](apercus/planche_sprites.png)
 

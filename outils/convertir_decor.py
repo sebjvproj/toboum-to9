@@ -1,7 +1,7 @@
 """Convertit une image quelconque en décor TO9 pour le jeu de bombes.
 
     python3 convertir_decor.py image.png [--nom egypte] [--couleurs 6] [--tramage bayer|fs|aucun]
-                               [--force 25] [--palette kmeans|mediane] [--taille]
+                               [--force 25] [--palette kmeans|mediane] [--taille] [--plein-ecran]
 
 Aire de jeu : 116 x 184 pixels TO9 (x 8..123, y 8..191) ; les pixels TO9 sont 1,67 fois plus
 larges que hauts sur un écran 4:3, l'image est donc recadrée au format physique puis réduite.
@@ -108,6 +108,7 @@ def tramer(small, rgbpal, mode, force):
 
 def ecran(decor):
     """écran 160x200 : noir, cadre gris (couleur 9 des sprites), décor, panneau vide"""
+    if (W, H) == (160, 200): return decor                   # plein écran (écran titre)
     scr = [[0] * 160 for _ in range(200)]
     for y in range(Y0 - 3, Y0 + H + 3):
         for x in range(X0 - 3, X0 + W + 3):
@@ -139,7 +140,11 @@ def main():
     ap.add_argument('--sans-couleurs-sprites', action='store_true',
                     help="le décor n'utilise pas les couleurs 7..15 des sprites")
     ap.add_argument('--taille', action='store_true', help='mesure la taille compressée (lent)')
+    ap.add_argument('--plein-ecran', action='store_true', help='image 160x200 sans cadre (écran titre)')
     a = ap.parse_args()
+    if a.plein_ecran:
+        global X0, Y0, W, H
+        X0, Y0, W, H = 0, 0, 160, 200
     assert 1 <= a.couleurs <= 6, 'le décor a 6 couleurs au plus (7..15 = sprites)'
     nom = a.nom or os.path.splitext(os.path.basename(a.image))[0]
     os.makedirs(os.path.join(HERE, '..', 'graphismes', 'decors'), exist_ok=True)

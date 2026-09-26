@@ -1,12 +1,19 @@
 """Tests du jeu TOboum dans le simulateur TO9 (lancer après source/build.sh)."""
 import os, sys, json, re
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', 'outils'))
 from to9sim import TO9, sym
 from PIL import Image
 os.chdir(os.path.join(HERE, '..', 'source'))
 S = sym('toboum.lst')
 NIV = json.load(open('toboum_niveau.json'))
 fails = []
+EQU = dict(re.findall(r'^(\w+)\s+EQU\s+(\d+)', open('toboum_data.asm').read(), re.M))
+TRECP, TRECY = int(EQU['TRECP']), int(EQU['TRECY'])
+def ligne_record(chiffres):
+    """1re ligne des chiffres (police 3x5, blanc 8 sur noir) telle que DIGIT l'écrit"""
+    from police import F
+    return [8 if k < 3 and F[c][k] == '1' else 0 for c in chiffres for k in range(4)]
 def check(ok, msg):
     print(('OK   ' if ok else 'ÉCHEC') + ' ' + msg)
     if not ok: fails.append(msg)
@@ -19,9 +26,22 @@ def pixels(s):
     return [[v for xb in range(40) for v in (A[y*40+xb] >> 4, A[y*40+xb] & 15, B[y*40+xb] >> 4, B[y*40+xb] & 15)]
             for y in range(200)]
 def boot(fd=True):
-    s = TO9('TOBOUM.BIN', fd='TOBOUM.fd' if fd else None); s.run_frames(60); return s
+    s = TO9('TOBOUM.BIN', fd='TOBOUM.fd' if fd else None); s.run_frames(60)
+    if fd: s.key(0x0D); s.run_frames(60)           # écran titre : une touche pour jouer
+    return s
 def poke(s, lab, v, off=0): s.mem.ram[S[lab] + off] = v & 0xFF
 def planche(s): return NIV['planches'][(s.peek(S['LEVELN']) - 1) % len(NIV['planches'])]
+
+# 0. écran titre : image de la disquette, record, attente d'une touche
+s = TO9('TOBOUM.BIN', fd='TOBOUM.fd'); s.run_frames(160)
+px = pixels(s); ref = NIV['decors']['titre']
+ecart = sum(px[y][x] != ref[y][x] for y in range(200) for x in range(160) if not (TRECY <= y < TRECY + 10))
+check(ecart == 0 and px[TRECY][2 * TRECP:2 * TRECP + 24] == ligne_record('000000') and s.peek(S['LIVES']) == 0,
+      f"écran titre affiché ({ecart} pixels différents), record 000000, on attend une touche")
+s.hold(0x0B, 30); s.run_frames(20)
+check(s.peek(S['LIVES']) == 0, "touche appuyée : on attend qu'elle soit relâchée")
+s.run_frames(40)
+check(s.peek(S['LIVES']) == 3 and s.peek(S['ONGND']) == 1, "relâchée : la partie commence, sans que Toto saute (↑ était la touche)")
 
 # 1. départ
 s = boot()
@@ -131,7 +151,12 @@ s.run_frames(90)
 check(s.peek(S['GSTATE']) == 3 and s.border == 12, "plus de vies : fin de partie (bord rouge)")
 check(bytes(s.mem.ram[S['RECORD']:S['RECORD'] + 3]).hex() == '001234', "le record est gardé")
 s.run_frames(160)
-check(s.peek(S['LIVES']) == 3 and score(s) == '000000' and s.peek(S['GSTATE']) == 0, "nouvelle partie")
+px = pixels(s)
+check(s.peek(S['LIVES']) == 0 and px[TRECY][2 * TRECP:2 * TRECP + 24] == ligne_record('001234'),
+      "écran titre avec le nouveau record, en attente d'une touche")
+s.key(0x20); s.run_frames(60)
+check(s.peek(S['LIVES']) == 3 and score(s) == '000000' and s.peek(S['GSTATE']) == 0 and s.peek(S['ONGND']) == 1,
+      "une touche : nouvelle partie (Toto au sol, la touche ne l'a pas fait sauter)")
 
 # 11. stabilité : 40 s de jeu au hasard
 import random
@@ -186,18 +211,19 @@ def ecart_decor(s, nom):
         if p != 0xFF: hors |= {(yy, xx) for yy in range(y, y + 16) for xx in range(2 * p, 2 * p + 8)}
     return sum(px[y][x] != ref[y][x] for y in range(8, 192) for x in range(8, 124) if (y, x) not in hors)
 ordre = NIV['ordre']
-dectab = [int(v, 16) for v in re.findall(r'\$([0-9A-F]{2})', open('toboum_data.asm').read().split('DECTAB')[1].split('\n*')[0].split('BUFROW')[0])[:2 * len(ordre)]]
+dectab = [int(v, 16) for v in re.findall(r'\$([0-9A-F]{2})', open('toboum_data.asm').read().split('DECTAB')[1].split('\n*')[0].split('BUFROW')[0])[:2 * len(ordre) + 2]]
 def secteurs(k):                                   # (piste, secteur) du 1er et du dernier secteur du décor k
     d, n = dectab[2 * k], dectab[2 * k + 1]
     return (21 + d // 16, d % 16 + 1), (21 + (d + n - 1) // 16, (d + n - 1) % 16 + 1), n
 s = boot()
 (p1, s1), (p2, s2), n1 = secteurs(0)
-lu = s.dk_reads
+nt = secteurs(len(ordre))[2]                       # l'écran titre est lu d'abord
+lu = s.dk_reads[nt:]
 check(len(lu) == n1 and lu[0][:2] == (p1, s1) and lu[-1][:2] == (p2, s2) and ecart_decor(s, ordre[0]) == 0,
       f"niveau 1 : {ordre[0]} lu sur la disquette ({len(lu)} secteurs) et affiché au pixel près")
 finir_niveau(s)
 (p1, s1), (p2, s2), n2 = secteurs(1)
-lu = s.dk_reads[n1:]
+lu = s.dk_reads[nt + n1:]
 check(len(lu) == n2 and lu[0][:2] == (p1, s1) and lu[-1][:2] == (p2, s2), f"niveau 2 : {len(lu)} secteurs lus, pistes {lu[0][:2]} -> {lu[-1][:2]}")
 check(ecart_decor(s, ordre[1]) == 0, f"niveau 2 : décor {ordre[1]} affiché ({ecart_decor(s, ordre[1])} pixels différents)")
 pal_attendue = [tuple(c) for c in json.load(open(f'../graphismes/decors/{ordre[1]}_palette.json'))['niveaux_to9']]
@@ -264,6 +290,8 @@ cx, cy = NIV['piece']
 px = pixels(s)
 dessin = sum(px[cy + j][cx + i] != NIV['decor'][cy + j][cx + i] for j in range(12) for i in range(8))
 check(s.peek(S['COINON']) == 1 and dessin > 20 and s.peek(S['PWR']) == 0, f"jauge à 20 (10 bombes allumées) : la pièce éclair apparaît ({dessin} pixels)")
+for k in range(1, s.peek(S['NENN']) + 1):           # ennemis loin de la pièce (en haut) : aucun mangé en la prenant
+    s.mem.ram[E + 16 * k] = 8 + 12 * k; s.mem.ram[E + 16 * k + 1] = 8
 sc0 = int(score(s)); s.mem.ram[S['INVUL']] = 0
 prendre(s, 18)
 enn = [E + 16 * k for k in range(1, s.peek(S['NENN']) + 1)]

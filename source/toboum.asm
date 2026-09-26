@@ -190,7 +190,8 @@ IJ9     RTS
 
 ****************************************************************
 * parties et niveaux
-NEWGAME LDD     #0
+NEWGAME JSR     TITLE           ; écran titre, jusqu'à l'appui d'une touche
+        LDD     #0
         STD     SCORE
         STA     SCORE+2
         LDA     #3
@@ -307,7 +308,8 @@ CD1     CMPA    #NDECOR
 CD2     STA     DECN
         JSR     LOADDECOR
         BCS     CD8
-        LDX     #BUFA           ; palette (copiée à part : SAVEBUF réécrira cette zone),
+* bloc lu dans BUFA : palette -> PALRAM (NEWPAL), début des deux banques -> LZPA, LZPB
+DECPTRS LDX     #BUFA           ; palette (copiée à part : SAVEBUF réécrira cette zone),
         LDU     #PALRAM         ; puis position de la banque B, puis banque A
         LDB     #32
 CD3     LDA     ,X+
@@ -328,6 +330,53 @@ CD8     LDX     #PALSECOURS
         STX     LZPA
         STX     LZPB
         RTS
+* écran titre (dernier bloc de DECORS.DAT) avec le record, jusqu'à l'appui d'une touche
+* (ou du bouton de la manette) ; rien si la disquette ne se lit pas
+TITLE   LDX     #PALNOIR
+        STX     PALPTR
+        JSR     SETPAL
+        CLR     BORDER
+        PSHS    CC
+        ORCC    #$50
+        LDA     #NDECOR
+        STA     DECN
+        JSR     LOADDECOR
+        BCS     TL9
+        JSR     DECPTRS
+        JSR     SHOWDECOR
+        PULS    CC
+        LDX     NEWPAL
+        STX     PALPTR
+        JSR     SETPAL
+        LDX     #RECORD
+        LDA     #TRECP
+        LDB     #TRECY
+        JSR     SHOWBCD3
+        JSR     NOKEY           ; d'abord tout relâcher (on sort peut-être d'une partie)
+        JSR     GETC            ; (touche déjà en mémoire : oubliée)
+TW1     JSR     GETC
+        TSTB
+        BNE     TW2
+        TST     JOYOK
+        BEQ     TW1
+        LDA     DAC
+        BITA    #$40
+        BNE     TW1
+TW2     JSR     NOKEY           ; relâchée : elle ne fait pas sauter Toto
+        CLR     LASTKEY
+        RTS
+TL9     PULS    CC,PC
+* attend qu'aucune touche ni le bouton de la manette ne soit appuyé
+NOKEY   LDA     KTEST
+        BITA    #1
+        BNE     NOKEY
+        TST     JOYOK
+        BEQ     NK9
+        LDA     DAC
+        BITA    #$40
+        BEQ     NOKEY
+NK9     RTS
+
 * « décor » compressé vide : 63 copies de 130 octets + littéraux (UNLZ s'arrête à 8000)
 DECVIDE FCB     $00,$00         ; 1 octet nul
         FCB     $FF,$00,$01     ; copie de 130 octets à distance 1 (le zéro précédent)...

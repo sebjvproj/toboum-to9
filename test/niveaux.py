@@ -1,4 +1,4 @@
-"""Les 5 niveaux (décor et planche) tels que le jeu les affiche -> apercus/niveaux.png"""
+"""L'écran titre et les 5 niveaux (décor et planche) tels que le jeu les affiche -> apercus/titre.png, niveaux.png"""
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 from to9sim import TO9, sym
@@ -12,6 +12,8 @@ def ecran():
     im.putdata([pal[v] for y in range(200) for xb in range(40)
                 for v in (A[y*40+xb] >> 4, A[y*40+xb] & 15, B[y*40+xb] >> 4, B[y*40+xb] & 15)])
     return im.resize((320, 200), Image.NEAREST)
+ecran().resize((640, 400), Image.NEAREST).save(os.path.join('..', 'apercus', 'titre.png'))   # écran titre
+s.key(0x0D); s.run_frames(60)
 planche = Image.new('RGB', (3 * 320 + 2 * 8, 2 * 200 + 8), (32, 32, 32))
 for n in range(5):
     planche.paste(ecran(), ((n % 3) * 328, (n // 3) * 208))
