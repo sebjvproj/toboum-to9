@@ -1,7 +1,8 @@
 """Mesure du scintillement dans le jeu. L'écran est reconstitué ligne par ligne au passage du
 faisceau (ce que montre un vrai téléviseur). Pour chaque image et chaque sprite, on vérifie qu'il
 apparaît entier (90 % de ses pixels visibles, ceux cachés par un autre sprite exceptés) à l'une
-de ses deux dernières positions dessinées.      python3 scintillement.py [nb_ennemis]"""
+de ses deux dernières positions dessinées.      python3 scintillement.py [nb_ennemis] [--piece]
+(--piece : la pièce éclair, qui rebondit, est à l'écran en plus des ennemis)"""
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'outils'))
@@ -15,18 +16,24 @@ NOMS = {'TOTO_M1D': 'TOTO_MARCHE', 'TOTO_M2D': 'TOTO_MARCHE_2', 'TOTO_M1G': '-TO
         'TOTO_V1D': 'TOTO_VOL', 'TOTO_V2D': 'TOTO_VOL_2', 'TOTO_V1G': '-TOTO_VOL', 'TOTO_V2G': '-TOTO_VOL_2',
         'TOTO_CH': 'TOTO_CHUTE', 'TOTO_PERDU': 'TOTO_PERDU', 'ROBOT_1': 'ROBOT', 'ROBOT_2': 'ROBOT_2',
         'CHAUVE_1': 'CHAUVE_SOURIS_1', 'CHAUVE_2': 'CHAUVE_SOURIS_2', 'BOULE_1': 'BOULE', 'BOULE_2': 'BOULE_2',
-        'NUAGE_1': 'NUAGE_1', 'NUAGE_2': 'NUAGE_2'}
+        'NUAGE_1': 'NUAGE_1', 'NUAGE_2': 'NUAGE_2', 'ECLAIR': 'ECLAIR'}
 GRILLE = {S['SPR_' + lab]: (miroir(SP.grid(n[1:])) if n.startswith('-') else SP.grid(n)) for lab, n in NOMS.items()}
 
-def mesure(n, images=100):
+def mesure(n, images=100, piece=False):
     s = TO9('TOBOUM.BIN', fd='TOBOUM.fd'); s.run_frames(50); s.key(0x0D); s.run_frames(120)   # écran titre : une touche, puis le niveau se charge
     s.mem.ram[S['NMAXLV']] = n
     while s.peek(S['NENN']) < n:                    # les ennemis arrivent (Toto invincible)
         s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 10); s.run_frames(10)
+    if piece:                                       # jauge pleine, puis Toto sur la bombe allumée
+        s.mem.ram[S['PWR']] = 7
+        bp = s.mem.read_word(S['BOMBPTR']) + 2 * s.peek(S['LIT'])
+        s.mem.ram[S['ENTS']] = s.peek(bp); s.mem.ram[S['ENTS'] + 1] = s.peek(bp + 1); s.mem.ram[S['ONGND']] = 0
+        s.mem.ram[S['INVUL']] = 250; s.run_frames(5)
+        assert s.peek(S['COINON']) == 1, 'la pièce devait apparaître'
     hist = []
     def note(sim):
         it = sim.peek(S['ITER']); st = []
-        for k in range(sim.peek(S['NENN']) + 1):
+        for k in range(sim.peek(S['NENN']) + 1 + sim.peek(S['COINON'])):
             b = S['ENTS'] + ESIZE * k
             st.append((sim.peek(b), sim.peek(b + 1), GRILLE[sim.mem.read_word(b + (8 if it & 8 else 6))]))
         hist.append(st)
@@ -51,6 +58,7 @@ def mesure(n, images=100):
     return ok, total, ((s.peek(S['ITER']) - it0) % 256) / images * 50
 
 if __name__ == '__main__':
-    for n in ([int(sys.argv[1])] if len(sys.argv) > 1 else (2, 4, 6, 8)):
-        ok, total, ips = mesure(n)
-        print(f'{n} ennemis : sprites entiers à l\'écran {ok}/{total} = {ok / total:.1%}, {ips:.0f} images/s')
+    args = [a for a in sys.argv[1:] if a != '--piece']; piece = '--piece' in sys.argv
+    for n in ([int(args[0])] if args else (2, 4, 6, 8)):
+        ok, total, ips = mesure(n, piece=piece)
+        print(f'{n} ennemis{" + pièce" if piece else ""} : sprites entiers à l\'écran {ok}/{total} = {ok / total:.1%}, {ips:.0f} images/s')

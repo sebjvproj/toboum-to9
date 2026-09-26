@@ -30,6 +30,18 @@ def boot(fd=True):
     if fd: s.key(0x0D); s.run_frames(60)           # écran titre : une touche pour jouer
     return s
 def poke(s, lab, v, off=0): s.mem.ram[S[lab] + off] = v & 0xFF
+def teleporte(s, p, y, apres=3):
+    """Toto en (p, y), en l'air, au début d'un tour de logique (sinon un calcul en cours l'écrase)"""
+    fait = []; avant = s.hooks.get(S['UPDONE'])
+    def h(sim):
+        if avant: avant(sim)
+        if not fait:
+            sim.mem.ram[E] = p; sim.mem.ram[E + 1] = y; sim.mem.ram[S['ONGND']] = 0; fait.append(1)
+    s.hooks[S['UPDONE']] = h
+    while not fait: s.run_frames(1)
+    if avant: s.hooks[S['UPDONE']] = avant
+    else: del s.hooks[S['UPDONE']]
+    s.run_frames(apres)
 def planche(s): return NIV['planches'][(s.peek(S['LEVELN']) - 1) % len(NIV['planches'])]
 
 # 0. écran titre : image de la disquette, record, attente d'une touche
@@ -93,7 +105,7 @@ check(0 <= v < 0x20 and s2.peek(S['ONGND']) == 0, f"frein : un nouvel appui en l
 # 5. bombe allumée (n° 0) ramassée : 200 points, la suivante s'allume, fond propre
 s = boot()
 bx, by = NIV['bombes'][0]
-poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
+teleporte(s, bx // 2, by, 0)
 s.run_frames(3)
 check(s.peek(S['BSTATE']) == 0 and score(s) == '000200', f"bombe allumée ramassée : +200 (score {score(s)})")
 check(s.peek(S['LIT']) == 1 and s.peek(S['BLEFT']) == 17, f"la bombe suivante s'allume (n° {s.peek(S['LIT'])})")
@@ -135,7 +147,7 @@ s = boot()
 for i in range(18): s.mem.ram[S['BSTATE'] + i] = 0
 s.mem.ram[S['BSTATE'] + 17] = 1; poke(s, 'BLEFT', 1)
 bx, by = NIV['bombes'][17]
-poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
+teleporte(s, bx // 2, by, 0)
 s.run_frames(3)
 check(s.peek(S['GSTATE']) == 2, "dernière bombe : niveau terminé")
 s.run_frames(200)                                  # (pause, lecture du décor sur la disquette)
@@ -200,7 +212,7 @@ def finir_niveau(s):
     for i in range(18): s.mem.ram[S['BSTATE'] + i] = 0
     s.mem.ram[S['BSTATE'] + 17] = 1; poke(s, 'BLEFT', 1)
     bx, by = planche(s)['bombes'][17]
-    poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
+    teleporte(s, bx // 2, by, 0)
     s.run_frames(3); s.run_frames(200)
 def ecart_decor(s, nom):
     """pixels de l'aire de jeu différents du décor attendu (hors bombes et Toto)"""
@@ -269,9 +281,11 @@ check(s.peek(S['GSTATE']) == 0 and vide == 0 and s.palette_rgb()[15] == tuple(lv
       f"sans disquette : fond noir hors bombes et Toto ({vide} pixels), couleurs des sprites, pas de plantage")
 
 # 14. chaîne de bombes allumées : les 18 dans l'ordre -> 18 x 200 + bonus 50000
+def piece(s): return E + 16 * (s.peek(S['NENN']) + 1)      # la pièce suit le dernier ennemi
 def prendre(s, i):
-    bx, by = NIV['bombes'][i] if i < 18 else NIV['piece']
-    poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0); s.run_frames(3)
+    if i < 18: bx, by = planche(s)['bombes'][i]; p = bx // 2
+    else: p, by = s.peek(piece(s)), s.peek(piece(s) + 1)
+    teleporte(s, p, by)
 s = boot()
 for n in range(18):
     s.mem.ram[S['INVUL']] = 250
@@ -288,9 +302,22 @@ for n in range(3):
     prendre(s, s.peek(S['LIT']))
 check(s.peek(S['COINON']) == 0 and s.peek(S['PWR']) == 6, f"3 bombes allumées : jauge à {s.peek(S['PWR'])}, pas encore de pièce")
 s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
-def piece_dessinee(s, pl):
-    cx, cy = pl['piece']; px = pixels(s); ref = NIV['decors'][NIV['ordre'][(s.peek(S['LEVELN']) - 1) % 5]]
-    return sum(px[cy + j][cx + i] != ref[cy + j][cx + i] for j in range(12) for i in range(8))
+def piece_dessinee(s, pl=None):
+    """pixels de la pièce à l'écran, mesurés à la fin d'une mise à jour de l'affichage
+    (entre deux, le moteur peut être en train de l'effacer pour la redessiner plus loin)"""
+    res = []; avant = s.hooks.get(S['UPDONE'])
+    def h(sim):
+        if avant: avant(sim)
+        if res: return
+        b = piece(sim); p, y = sim.peek(b + 2), sim.peek(b + 3)
+        if p == 0xFF or sim.mem.read_word(b + 6) != S['SPR_ECLAIR']: res.append(0); return
+        px = pixels(sim); ref = NIV['decors'][NIV['ordre'][(sim.peek(S['LEVELN']) - 1) % 5]]
+        res.append(sum(px[y + j][2 * p + i] != ref[y + j][2 * p + i] for j in range(16) for i in range(8)))
+    s.hooks[S['UPDONE']] = h
+    while not res: s.run_frames(1)
+    if avant: s.hooks[S['UPDONE']] = avant
+    else: del s.hooks[S['UPDONE']]
+    return res[0]
 dessin = piece_dessinee(s, planche(s))
 check(s.peek(S['COINON']) == 1 and dessin > 20 and s.peek(S['PWR']) == 0, f"jauge à 8 (4 bombes allumées) : la pièce éclair apparaît ({dessin} pixels)")
 s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
@@ -344,6 +371,30 @@ for i in range(60): s.mem.ram[S['INVUL']] = 250; s.run_frames(50)
 check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (112, 90, 6), f"après 70 s : plafond (vitesse {s.peek(S['ESPEED'])}, apparitions {s.peek(S['SPDEF'])})")
 finir_niveau(s)
 check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (64, 150, 0), "niveau suivant : on repart du début")
+
+# 17 bis. la pièce rebondit en diagonale dans l'aire de jeu ; elle survit à un nouvel ennemi et à une vie perdue
+s = boot(); s.mem.ram[S['NMAXLV']] = 2
+for n in range(4): s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+depart = (s.peek(piece(s)), s.peek(piece(s) + 1))
+pc = planche(s)['piece']
+check(s.peek(S['COINON']) == 1 and abs(depart[0] - pc[0] // 2) <= 1 and abs(depart[1] - pc[1]) <= 6,
+      f"la pièce part de la place prévue par la planche {depart}")
+pos = []; nenn = []
+s.hooks[S['UPDONE']] = lambda sim: (pos.append((sim.peek(piece(sim)), sim.peek(piece(sim) + 1))), nenn.append(sim.peek(S['NENN'])))
+for i in range(100):                               # 20 s, Toto invincible et loin (en bas à gauche)
+    s.mem.ram[S['INVUL']] = 250; poke(s, 'ENTS', 4); poke(s, 'ENTS', 176, 1); s.run_frames(10)
+    if s.peek(S['COINON']) == 0: break
+del s.hooks[S['UPDONE']]
+ps = [p for p, y in pos]; ys = [y for p, y in pos]
+check(s.peek(S['COINON']) == 1 and min(ps) >= 4 and max(ps) <= 58 and min(ys) >= 8 and max(ys) <= 176,
+      f"20 s : la pièce reste dans l'aire de jeu (paires {min(ps)}-{max(ps)}, lignes {min(ys)}-{max(ys)})")
+check(max(ys) - min(ys) > 150 and max(ps) - min(ps) > 20, "elle parcourt l'écran (rebonds en haut, en bas, sur les côtés)")
+check(max(nenn) == 2 and piece_dessinee(s) > 20, f"des ennemis sont apparus ({max(nenn)}) : la pièce est toujours là et dessinée")
+k = 1; s.mem.ram[S['INVUL']] = 0; s.mem.ram[E + 16] = P(s); s.mem.ram[E + 17] = Y(s); s.run_frames(110)
+check(s.peek(S['LIVES']) == 2 and s.peek(S['NENN']) == 0 and s.peek(S['COINON']) == 1 and piece_dessinee(s) > 20,
+      "vie perdue : les ennemis partent, la pièce reste")
+sc0 = int(score(s)); s.mem.ram[S['INVUL']] = 250; prendre(s, 18)
+check(s.peek(S['COINON']) == 0 and s.peek(S['POWER']) > 200, f"attrapée là où elle est : gel")
 
 # 18. pièce pas prise en fin de niveau : elle est rendue dès le niveau suivant
 s = boot()

@@ -255,7 +255,7 @@ if __name__ == '__main__':
     # bombes aussi compilées pour la copie du décor (29 octets par ligne)
     out += compile_sprite('BUF_BOMBE', SP.grid('BOMBE'), BUF_ROWB)
     out += compile_sprite('BUF_BOMBE_AL', SP.grid('BOMBE_ALLUMEE'), BUF_ROWB)
-    out += compile_sprite('BUF_ECLAIR', SP.grid('ECLAIR'), BUF_ROWB)        # pièce éclair
+    out += compile_sprite('SPR_ECLAIR', SP.grid('ECLAIR'))                  # pièce éclair (elle bouge)
     out += compile_sprite('SPR_GLACON', SP.grid('GLACON'))                  # ennemi gelé
     # images des ennemis par type (1 robot, 2 chauve-souris, 3 boule, 4 nuage)
     out.append("TYPIMG  FDB     SPR_ROBOT_1,SPR_ROBOT_2,SPR_CHAUVE_1,SPR_CHAUVE_2")

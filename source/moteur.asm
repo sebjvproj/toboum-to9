@@ -4,11 +4,13 @@
 *  effacement par copie du décor, horloge au cycle près (timer 6846).
 *  Le programme qui l'inclut définit : ESIZE, NMAX, BUFA/BUFB, ER16, BUFROW et les variables,
 *  dont PALPTR (palette) et LZPA/LZPB (décor compressé) (voir toboum.asm).
+*  Entités : 0 = héros, 1..NENN, puis NXTRA (0 ou 1) entité(s) en plus (la pièce éclair).
 ****************************************************************
 ERASEALL
         LDU     #ENTS
         LDB     NENN
         INCB
+        ADDB    NXTRA
 EA1     PSHS    B
         LDA     2,U
         CMPA    #$FF
@@ -174,9 +176,10 @@ ENTADR  LDA     #ESIZE
         TFR     D,X
         RTS
 
-* ORDER = entités triées par ligne croissante (tri par insertion, 9 au plus)
+* ORDER = entités triées par ligne croissante (tri par insertion, 10 au plus)
 SORT    LDB     NENN
         INCB
+        ADDB    NXTRA
         STB     NACT
         LDX     #ORDER
         CLRA

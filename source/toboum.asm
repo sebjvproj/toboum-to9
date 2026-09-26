@@ -67,6 +67,8 @@ RAGEMX  EQU     6               ;   6 fois au plus (au bout d'une minute)
 TRANSF  EQU     75              ; un robot au sol se transforme au bout de 1,5 s,
 TCLIGN  EQU     25              ; après avoir clignoté 0,5 s
 PWRSEUIL EQU    8               ; jauge : la pièce éclair apparaît à 8 (bombe éteinte 1, allumée 2)
+CVX     EQU     64              ; pièce : 0,25 paire par top (25 pixels/s)...
+CVY     EQU     208             ; ... et 0,8 ligne par top : elle rebondit en diagonale
 GRAV    EQU     $000E           ; 0,055 ligne/top²
 SAUT    EQU     $0378           ; 3,47 lignes/top au décollage
 CHUTEMX EQU     $0400           ; chute limitée à 4 lignes/top
@@ -545,7 +547,7 @@ PALNOIR FCB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 * Toto au point de départ, plus d'ennemis à l'écran (tous marqués « jamais dessinés »)
 TOTORESET
         LDX     #ENTS
-        LDB     #NMAX+1
+        LDB     #NMAX+2
 TR1     LDA     #$FF
         STA     2,X
         LEAX    ESIZE,X
@@ -593,6 +595,7 @@ TL2     JSR     ENNTICK
         JSR     RAGETICK
 TL3     JSR     COLLIDE
         JSR     BOMBCHK
+        JSR     COINTICK
         JMP     COINCHK
 
 ****************************************************************
@@ -1133,6 +1136,8 @@ SPAWNTICK
         LDA     NENN
         CMPA    NMAXLV
         BHS     SW9
+        JSR     COINUP          ; la pièce laisse sa place au nouveau
+        LDA     NENN
         INCA
         STA     NENN
         LDB     #ESIZE
@@ -1226,7 +1231,8 @@ AFTERDEATH
         LDA     #C_ROUGE
         STA     BORDER
         RTS
-AD1     JSR     ERASEALL        ; on efface tout le monde et on repart
+AD1     JSR     ERASEALL        ; on efface tout le monde et on repart (la pièce reste)
+        JSR     COINTO1
         CLR     NENN
         JSR     TOTORESET
         LDA     #100
@@ -1364,35 +1370,122 @@ COINMAYBE
         CMPA    #PWRSEUIL
         BLO     CM9
         CLR     PWR
-        INC     COINON
-        LDA     #NBOMB
-        STA     BIDX
-        JSR     BOMBADR
-        LDY     #BUF_ECLAIR
-        JMP     BS1             ; dessin dans la copie du décor, puis à l'écran
+        LDB     NENN            ; la pièce est l'entité qui suit les ennemis
+        INCB
+        JSR     ENTADR
+        LDU     BOMBPTR         ; elle part de la place prévue par la planche
+        LDD     NBOMB*2,U
+        STD     ,X
+        LDA     #$FF            ; (jamais dessinée)
+        STA     2,X
+        LDD     #SPR_ECLAIR
+        STD     6,X
+        STD     8,X
+        CLR     12,X
+        CLR     13,X
+        LDD     #$0101          ; direction : selon le moment, pour varier
+        STD     4,X
+        LDA     ITER
+        BITA    #1
+        BEQ     CM1
+        NEG     4,X
+CM1     BITA    #2
+        BEQ     CM2
+        NEG     5,X
+CM2     INC     COINON
 CM9     RTS
+
+* la pièce rebondit sur les bords de l'aire de jeu (elle passe devant les plateformes)
+COINTICK
+        TST     COINON
+        BEQ     CV9
+        LDB     NENN
+        INCB
+        JSR     ENTADR
+        TFR     X,U
+        LDA     12,U            ; horizontal
+        ADDA    #CVX
+        STA     12,U
+        BCC     CV3
+        LDA     ,U
+        ADDA    4,U
+        CMPA    #PMIN
+        BLT     CV2
+        CMPA    #PMAX
+        BGT     CV2
+        STA     ,U
+        BRA     CV3
+CV2     NEG     4,U
+CV3     LDA     13,U            ; vertical
+        ADDA    #CVY
+        STA     13,U
+        BCC     CV9
+        LDA     1,U
+        ADDA    5,U
+        CMPA    #YMIN
+        BLO     CV4
+        CMPA    #YMAX
+        BHI     CV4
+        STA     1,U
+        RTS
+CV4     NEG     5,U
+CV9     RTS
+
+* la pièce suit toujours le dernier ennemi : on la décale quand leur nombre change
+COINUP  TST     COINON          ; (avant NENN + 1) entité NENN+1 -> NENN+2
+        BEQ     CV9
+        LDB     NENN
+        INCB
+        JSR     ENTADR
+        LEAU    ESIZE,X
+        BRA     CPENT
+COINDN  TST     COINON          ; (après NENN - 1) entité NENN+2 -> NENN+1
+        BEQ     CV9
+        LDB     NENN
+        INCB
+        JSR     ENTADR
+        TFR     X,U
+        LEAX    ESIZE,U
+        BRA     CPENT
+COINTO1 TST     COINON          ; (avant NENN = 0) entité NENN+1 -> 1
+        BEQ     CV9
+        LDB     NENN
+        INCB
+        JSR     ENTADR
+        LDU     #ENTS+ESIZE
+CPENT   LDB     #ESIZE          ; copie de l'entité X en U
+CE1     LDA     ,X+
+        STA     ,U+
+        DECB
+        BNE     CE1
+        RTS
 
 * Toto prend la pièce : 5 s de gel (250 tops), ennemis en glaçons, bord bleu
 COINCHK TST     COINON
         BEQ     PC9
-        LDX     BOMBPTR         ; la pièce suit les 18 bombes dans la table
-        LDA     NBOMB*2,X       ; |paire - Toto| <= 2 et |ligne - Toto| < 12
+        LDB     NENN
+        INCB
+        JSR     ENTADR
+        LDA     ,X              ; |paire - Toto| <= 2 et |ligne - Toto| < 12
         SUBA    ENTS
         BPL     PC1
         NEGA
 PC1     CMPA    #2
         BHI     PC9
-        LDA     NBOMB*2+1,X
+        LDA     1,X
         SUBA    ENTS+1
         BPL     PC2
         NEGA
 PC2     CMPA    #12
         BHS     PC9
-        CLR     COINON
-        LDA     #NBOMB
-        STA     BIDX
-        JSR     BOMBHIDE
-        LDA     #250
+        CLR     COINON          ; attrapée : on l'efface
+        LDA     2,X
+        CMPA    #$FF
+        BEQ     PC3
+        LDB     3,X
+        JSR     ERASE
+        JSR     REPAIRTOTO
+PC3     LDA     #250
         STA     POWER
         CLR     EATCNT
         JSR     SETGLACON
@@ -1496,6 +1589,7 @@ ET3     LDA     ,X+
         DECB
         BNE     ET3
 ET4     DEC     NENN
+        JSR     COINDN
         JSR     REPAIRTOTO
         LDX     #SFX_MANGE
         JMP     PLAYSFX
@@ -1855,8 +1949,8 @@ VOL2    RMB     1
 SFXINC  RMB     2
 SFXSLIDE RMB    2
 SFXCNT  RMB     1
-ENTS    RMB     ESIZE*(NMAX+1)
-ORDER   RMB     NMAX+1
+ENTS    RMB     ESIZE*(NMAX+2)  ; Toto, ennemis, pièce éclair
+ORDER   RMB     NMAX+2
 NACT    RMB     1
 SI      RMB     1
 SJ      RMB     1
@@ -1909,7 +2003,8 @@ CHAIN   RMB     1               ; bombes allumées ramassées dans ce niveau
 PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à PWRSEUIL)
 GOD     RMB     1               ; mode invincible
 GODUSED RMB     1               ; ... utilisé pendant cette partie (pas de record)
-COINON  RMB     1               ; pièce éclair présente
+COINON  RMB     1               ; pièce éclair présente (entité NENN+1)
+NXTRA   EQU     COINON          ; (pour le moteur : entités en plus des ennemis)
 POWER   RMB     1               ; gel en cours (tops restants)
 EATCNT  RMB     1               ; glaçons mangés pendant ce gel
 PALPTR  RMB     2               ; palette courante
