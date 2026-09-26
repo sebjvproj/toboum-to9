@@ -1,13 +1,15 @@
-# TOboum — jeu de plates-formes pour Thomson TO9
+# TOboum — un jeu inspiré de Bomb Jack pour Thomson TO9
 
-Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs, et testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
+Un jeu de plates-formes inspiré de **Bomb Jack** (Tehkan, 1984). Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau, de préférence dans l'ordre où elles s'allument, en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs, et testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
 
-*A platform game for the Thomson TO9 8-bit computer, written in 6809 assembly (French UI).*
+*A Bomb Jack-inspired platform game for the Thomson TO9 8-bit computer, written in 6809 assembly (French UI).*
 
 Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropic) : moteur 6809, sprites, outils, simulateur et tests. Les décors ont été générés par un modèle d'image à partir de descriptions en texte ([graphismes/PROMPTS.md](graphismes/PROMPTS.md)), puis convertis pour le TO9.
 *Entirely vibe-coded with Claude.*
 
 ![En jeu](apercus/toboum.gif)
+
+> TOboum est un projet amateur, sans lien avec Koei Tecmo. Bomb Jack est une marque de Koei Tecmo. Le jeu reprend l'idée et les règles générales de Bomb Jack, mais aucune de ses données : graphismes, sons, niveaux et code ont été créés pour ce projet.
 
 > Version en cours de développement.
 
@@ -66,7 +68,7 @@ pip install pillow MC6809
 cd test
 python3 test_jeu.py         # saut, vol plané, bombes, ennemis, vies, niveaux, fin de partie, 40 s au hasard
 python3 scintillement.py    # sprites entiers à l'écran avec 2 à 8 ennemis (--piece : pièce éclair en plus)
-python3 film.py             # petit film -> apercus/toboum.gif
+python3 film.py             # une partie jouée par un pilote automatique -> apercus/toboum.gif
 python3 niveaux.py          # l'écran titre et les 5 niveaux -> apercus/titre.png, niveaux.png
 ```
 
