@@ -18,8 +18,10 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 
 ## Jouer
 
-1. Construisez la disquette (voir plus bas) : vous obtenez `source/TOBOUM.fd`.
-2. Dans DCMOTO, choisissez la machine **TO9**, puis chargez `TOBOUM.fd`.
+Téléchargez `TOBOUM.fd` depuis la page [Releases](../../releases) (ou construisez-la, voir plus bas).
+
+1. Dans DCMOTO, choisissez la machine **TO9**, puis *Supports amovibles > Disquettes > Charger* `TOBOUM.fd`.
+2. Redémarrez le TO9.
 3. Dans le menu du TO9, choisissez **3 - BASIC 128**, puis tapez `RUN"TOBOUM"`.
 4. L'écran titre affiche le record : appuyez sur une touche (ou le bouton de la manette) pour jouer.
 
