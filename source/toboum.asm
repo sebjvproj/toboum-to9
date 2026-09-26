@@ -69,6 +69,7 @@ G_FIN   EQU     3
 C_BLANC EQU     8
 C_JAUNE EQU     11
 C_ROUGE EQU     12
+C_BLEU  EQU     14
 
         ORG     $A000
 START   LDB     #$14            ; curseur invisible
@@ -214,6 +215,8 @@ NL1     STA     BIDX
         INCA
         CMPA    #NBOMB
         BNE     NL1
+        STA     BIDX            ; (A = NBOMB) fond propre sous la pièce éclair
+        JSR     PATCHSAVE
         CLR     LIT             ; la bombe 0 est allumée
         CLRA
 NL2     STA     BIDX
@@ -241,6 +244,10 @@ NL3     STA     NMAXLV
         LDA     #3
 NL4     STA     SPDMASK
         CLR     NSPAWN
+        CLR     CHAIN           ; chaîne de bombes allumées, jauge, pièce, gel
+        CLR     PWR
+        CLR     POWER
+        CLR     COINON
         LDA     #50
         STA     INVUL
         LDA     #G_JEU
@@ -441,10 +448,15 @@ TLNEXT  LDA     LEVELB          ; niveau suivant (BCD et binaire)
         INC     LEVELN
         JMP     NEWLEVEL
 TL1     JSR     TOTOTICK
-        JSR     ENNTICK
+        TST     POWER           ; ennemis gelés : ils ne bougent pas, rien n'apparaît
+        BEQ     TL2
+        JSR     POWERTICK
+        BRA     TL3
+TL2     JSR     ENNTICK
         JSR     SPAWNTICK
-        JSR     COLLIDE
-        JMP     BOMBCHK
+TL3     JSR     COLLIDE
+        JSR     BOMBCHK
+        JMP     COINCHK
 
 ****************************************************************
 * Toto : marche, saut, vol plané, plateformes
@@ -959,7 +971,9 @@ SW9     RTS
 
 ****************************************************************
 * collisions Toto / ennemis
-COLLIDE TST     INVUL
+COLLIDE TST     POWER
+        LBNE    EATCHK
+        TST     INVUL
         BEQ     CO1
         DEC     INVUL
         RTS
@@ -1069,13 +1083,17 @@ TAKEBOMB
         LDA     BIDX
         CMPA    LIT
         BEQ     TB1
-        LDX     #PTS100         ; bombe éteinte : 100
+        LDX     #PTS100         ; bombe éteinte : 100, jauge +1
         JSR     ADDSCORE
+        INC     PWR
         LDX     #SFX_BOMBE
         JSR     PLAYSFX
         BRA     TB5
-TB1     LDX     #PTS200         ; bombe allumée : 200, la suivante s'allume
+TB1     LDX     #PTS200         ; bombe allumée : 200, chaîne +1, jauge +2, la suivante s'allume
         JSR     ADDSCORE
+        INC     CHAIN
+        INC     PWR
+        INC     PWR
         LDX     #SFX_ALLUMEE
         JSR     PLAYSFX
         TST     BLEFT
@@ -1091,8 +1109,10 @@ TB3     LDX     #BSTATE
         STA     LIT
         STA     BIDX
         JSR     BOMBSHOW
-TB5     TST     BLEFT           ; plus de bombes : niveau terminé
+TB5     JSR     COINMAYBE       ; jauge pleine : la pièce éclair apparaît
+        TST     BLEFT           ; plus de bombes : niveau terminé
         BNE     TB9
+        JSR     CHAINBONUS
         LDA     #G_BRAVO
         STA     GSTATE
         LDA     #60
@@ -1100,6 +1120,177 @@ TB5     TST     BLEFT           ; plus de bombes : niveau terminé
         LDX     #SFX_NIVEAU
         JSR     PLAYSFX
 TB9     RTS
+
+* bonus de fin de niveau selon la chaîne de bombes allumées : 15 -> 10000 ... 18 -> 50000
+CHAINBONUS
+        LDA     CHAIN
+        CMPA    #NBOMB-3
+        BLO     CB9
+        SUBA    #NBOMB-3
+        LDB     #3
+        MUL
+        LDX     #BONUSTAB
+        ABX
+        JSR     ADDSCORE
+        LDA     #C_JAUNE        ; bord jaune pendant la pause : bonus gagné
+        STA     BORDER
+CB9     RTS
+BONUSTAB FCB    $01,$00,$00,$02,$00,$00,$03,$00,$00,$05,$00,$00
+
+* jauge : à 20, la pièce éclair apparaît au centre (si elle n'est pas déjà là)
+COINMAYBE
+        TST     COINON
+        BNE     CM9
+        TST     POWER
+        BNE     CM9
+        LDA     PWR
+        CMPA    #20
+        BLO     CM9
+        CLR     PWR
+        INC     COINON
+        LDA     #NBOMB
+        STA     BIDX
+        JSR     BOMBADR
+        LDY     #BUF_ECLAIR
+        JMP     BS1             ; dessin dans la copie du décor, puis à l'écran
+CM9     RTS
+
+* Toto prend la pièce : 5 s de gel (250 tops), ennemis en glaçons, bord bleu
+COINCHK TST     COINON
+        BEQ     PC9
+        LDA     BOMBS+NBOMB*2   ; |paire - Toto| <= 2 et |ligne - Toto| < 12
+        SUBA    ENTS
+        BPL     PC1
+        NEGA
+PC1     CMPA    #2
+        BHI     PC9
+        LDA     BOMBS+NBOMB*2+1
+        SUBA    ENTS+1
+        BPL     PC2
+        NEGA
+PC2     CMPA    #12
+        BHS     PC9
+        CLR     COINON
+        LDA     #NBOMB
+        STA     BIDX
+        JSR     BOMBHIDE
+        LDA     #250
+        STA     POWER
+        CLR     EATCNT
+        JSR     SETGLACON
+        LDA     #C_BLEU
+        STA     BORDER
+        LDX     #SFX_ECLAIR
+        JMP     PLAYSFX
+PC9     RTS
+
+* gel en cours : compte à rebours ; la dernière seconde, les glaçons clignotent
+POWERTICK
+        DEC     POWER
+        BEQ     PW8
+        LDA     POWER
+        CMPA    #50
+        BHS     PW9
+        BITA    #8
+        LBEQ    SETGLACON
+        JMP     NORMIMGS
+PW8     JSR     NORMIMGS        ; fin du gel : les ennemis repartent, courte grâce
+        LDA     #30
+        STA     INVUL
+        CLR     BORDER
+PW9     RTS
+
+* images des ennemis : glaçon, ou les images de leur type
+SETGLACON
+        LDB     NENN
+        BEQ     SG9
+        LDU     #ENTS+ESIZE
+        LDX     #SPR_GLACON
+SG1     STX     6,U
+        STX     8,U
+        LEAU    ESIZE,U
+        DECB
+        BNE     SG1
+SG9     RTS
+NORMIMGS
+        LDB     NENN
+        BEQ     NI9
+        LDU     #ENTS+ESIZE
+NI1     PSHS    B
+        LDB     11,U
+        DECB
+        ASLB
+        ASLB
+        LDX     #TYPIMG
+        ABX
+        LDD     ,X
+        STD     6,U
+        LDD     2,X
+        STD     8,U
+        LEAU    ESIZE,U
+        PULS    B
+        DECB
+        BNE     NI1
+NI9     RTS
+
+* gel : un glaçon touché est mangé (100, 200, 300, 500, 800, 1200, 2000) et disparaît
+EATCHK  LDB     NENN
+        BEQ     EK9
+        LDU     #ENTS+ESIZE
+EK1     LDA     ,U
+        SUBA    ENTS
+        BPL     EK2
+        NEGA
+EK2     CMPA    #3
+        BHS     EK4
+        LDA     1,U
+        SUBA    ENTS+1
+        BPL     EK3
+        NEGA
+EK3     CMPA    #12
+        BLO     EATIT
+EK4     LEAU    ESIZE,U
+        DECB
+        BNE     EK1
+EK9     RTS
+EATIT   LDA     EATCNT
+        LDB     #3
+        MUL
+        LDX     #EATPTS
+        ABX
+        JSR     ADDSCORE
+        LDA     #1
+        STA     DIRTY
+        LDA     EATCNT
+        CMPA    #6
+        BHS     ET1
+        INC     EATCNT
+ET1     LDA     2,U             ; efface le glaçon
+        CMPA    #$FF
+        BEQ     ET2
+        LDB     3,U
+        PSHS    U
+        JSR     ERASE
+        PULS    U
+ET2     LDA     NENN            ; le dernier ennemi prend sa place
+        LDB     #ESIZE
+        MUL
+        ADDD    #ENTS
+        TFR     D,X
+        PSHS    U
+        CMPX    ,S++
+        BEQ     ET4
+        LDB     #ESIZE
+ET3     LDA     ,X+
+        STA     ,U+
+        DECB
+        BNE     ET3
+ET4     DEC     NENN
+        JSR     REPAIRTOTO
+        LDX     #SFX_MANGE
+        JMP     PLAYSFX
+EATPTS  FCB     $00,$01,$00,$00,$02,$00,$00,$03,$00,$00,$05,$00
+        FCB     $00,$08,$00,$00,$12,$00,$00,$20,$00
 
 * X = adresse de la bombe BIDX dans la copie du décor (banque A) ; A = paire, B = ligne
 BOMBADR LDX     #BOMBS
@@ -1178,6 +1369,8 @@ BS1     JSR     [,Y]            ; banque A (paires 0 et 2)
 BOMBSCR LDA     CP
         LDB     CY
         JSR     ERASE
+* redessine Toto à sa place à l'écran (après un effacement qui a pu l'abîmer)
+REPAIRTOTO
         LDU     #ENTS
         LDA     2,U
         CMPA    #$FF
@@ -1384,6 +1577,10 @@ SFX_MORT    FDB 14000,-500
             FCB 25
 SFX_NIVEAU  FDB 10000,800
             FCB 25
+SFX_ECLAIR  FDB 8000,1200
+            FCB 18
+SFX_MANGE   FDB 26000,-900
+            FCB 8
 
 SNDIRQ  PSHS    D
         LDD     TIMEACC         ; horloge : +1000 cycles par IRQ
@@ -1420,7 +1617,7 @@ SQ9     PULS    D
         INCLUDE "toboum_data.asm"
 ENDCODE
 
-        ORG     PATCH+NBOMB*64
+        ORG     PATCH+(NBOMB+1)*64 ; (fond des 18 bombes et de la pièce éclair)
 VARS
 NENN    RMB     1
 ITER    RMB     1
@@ -1492,6 +1689,11 @@ BIDX    RMB     1
 BLEFT   RMB     1
 LIT     RMB     1
 BSTATE  RMB     NBOMB
+CHAIN   RMB     1               ; bombes allumées ramassées dans ce niveau
+PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à 20)
+COINON  RMB     1               ; pièce éclair présente
+POWER   RMB     1               ; gel en cours (tops restants)
+EATCNT  RMB     1               ; glaçons mangés pendant ce gel
 PALPTR  RMB     2               ; palette courante
 NEWPAL  RMB     2               ; palette du décor en préparation
 PALRAM  RMB     32              ; palette d'un décor lu sur la disquette

@@ -31,7 +31,9 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
 ### Règles
 
 - **Saut** : 10 points à chaque décollage.
-- **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante. Quand tout est ramassé, on passe au niveau suivant.
+- **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante, toujours dans le même ordre : il y a un parcours idéal à trouver. Quand tout est ramassé, on passe au niveau suivant.
+- **Bonus de chaîne** : en fin de niveau, 15 bombes allumées ramassées rapportent 10 000 points, 16 en rapportent 20 000, 17 en rapportent 30 000 et les 18, 50 000 (bord jaune).
+- **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 20, une pièce éclair apparaît au centre. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
 - **Un décor par niveau**, en boucle : Égypte, Rome, Moscou, Paris, Mont-Saint-Michel.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
   - le **robot** tombe, puis marche sur les plateformes ;

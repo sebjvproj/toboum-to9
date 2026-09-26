@@ -201,5 +201,45 @@ vide = sum(px[y][x] != 0 for y in range(8, 192) for x in range(8, 124) if (y, x)
 check(s.peek(S['GSTATE']) == 0 and vide == 0 and s.palette_rgb()[15] == tuple(lv[c] for c in pal_attendue[15]),
       f"sans disquette : fond noir hors bombes et Toto ({vide} pixels), couleurs des sprites, pas de plantage")
 
+# 14. chaîne de bombes allumées : les 18 dans l'ordre -> 18 x 200 + bonus 50000
+def prendre(s, i):
+    bx, by = NIV['bombes'][i] if i < 18 else NIV['piece']
+    poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0); s.run_frames(3)
+s = boot()
+for n in range(18):
+    s.mem.ram[S['INVUL']] = 250
+    prendre(s, s.peek(S['LIT']))
+check(s.peek(S['CHAIN']) == 18 and s.peek(S['GSTATE']) == 2 and score(s) == '053600' and s.border == 11,
+      f"chaîne complète : {s.peek(S['CHAIN'])} bombes allumées, score {score(s)} (3600 + bonus 50000), bord jaune")
+
+# 15. jauge -> pièce éclair -> gel : glaçons mangés 100 puis 200, fin du gel
+s = boot(); s.mem.ram[S['NMAXLV']] = 3
+while s.peek(S['NENN']) < 3:
+    s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 10); s.run_frames(10)
+for n in range(10):
+    s.mem.ram[S['INVUL']] = 250
+    prendre(s, s.peek(S['LIT']))
+cx, cy = NIV['piece']
+px = pixels(s)
+dessin = sum(px[cy + j][cx + i] != NIV['decor'][cy + j][cx + i] for j in range(12) for i in range(8))
+check(s.peek(S['COINON']) == 1 and dessin > 20 and s.peek(S['PWR']) == 0, f"jauge à 20 (10 bombes allumées) : la pièce éclair apparaît ({dessin} pixels)")
+sc0 = int(score(s)); s.mem.ram[S['INVUL']] = 0
+prendre(s, 18)
+enn = [E + 16 * k for k in range(1, s.peek(S['NENN']) + 1)]
+check(s.peek(S['POWER']) > 200 and s.border == 14 and all(s.mem.read_word(b + 6) == S['SPR_GLACON'] for b in enn),
+      "pièce prise : gel, ennemis en glaçons, bord bleu")
+pos = [(s.peek(b), s.peek(b + 1)) for b in enn]; s.run_frames(20)
+check(pos == [(s.peek(b), s.peek(b + 1)) for b in enn], "les glaçons ne bougent pas")
+for k, pts in ((1, 100), (1, 200)):
+    n0 = s.peek(S['NENN']); b = E + 16 * k
+    s.mem.ram[b] = P(s); s.mem.ram[b + 1] = Y(s); s.run_frames(3)
+    check(s.peek(S['NENN']) == n0 - 1 and int(score(s)) - sc0 == pts and s.peek(S['GSTATE']) == 0,
+          f"glaçon mangé : +{int(score(s)) - sc0} points, {s.peek(S['NENN'])} ennemi(s) restant(s), Toto intact")
+    sc0 = int(score(s))
+s.run_frames(260)
+reste = [E + 16 * k for k in range(1, s.peek(S['NENN']) + 1)]
+check(s.peek(S['POWER']) == 0 and s.border == 0 and all(s.mem.read_word(b + 6) != S['SPR_GLACON'] for b in reste),
+      "fin du gel : les ennemis reprennent leur apparence")
+
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

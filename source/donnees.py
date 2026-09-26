@@ -21,6 +21,7 @@ BOMBES = [(12, 12), (24, 12), (36, 12), (84, 12), (96, 12), (108, 12),
           (12, 80), (12, 100), (12, 120), (112, 70), (112, 90), (112, 110),
           (24, 44), (36, 44), (76, 88), (92, 88), (28, 134), (44, 134)]
 DEPART = (60, 176)                                 # Toto au départ (x pixels, y)
+PIECE = (60, 76)                                   # pièce éclair : au centre, loin des bombes et plateformes
 
 def charge_decor(nom):
     """décor converti par outils/convertir_decor.py -> (pixels[200][160], niveaux TO9 de la palette)"""
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     out.append(f"NPLAT   EQU     {len(PLATEFORMES)}")
     db("PLATS", sum([[x // 2, (x + w) // 2, y] for x, y, w in PLATEFORMES], []), 12)
     out.append(f"NBOMB   EQU     {len(BOMBES)}")
-    db("BOMBS", sum([[x // 2, y] for x, y in BOMBES], []), 12)
+    db("BOMBS", sum([[x // 2, y] for x, y in BOMBES + [PIECE]], []), 12)   # (la pièce éclair en dernier)
     out.append(f"DEPP    EQU     {DEPART[0] // 2}")
     out.append(f"DEPY    EQU     {DEPART[1]}")
     # chiffres 3x5 : une ligne = 3 bits (bit 2 = pixel de gauche)
@@ -162,6 +163,8 @@ if __name__ == '__main__':
     # bombes aussi compilées pour la copie du décor (29 octets par ligne)
     out += compile_sprite('BUF_BOMBE', SP.grid('BOMBE'), BUF_ROWB)
     out += compile_sprite('BUF_BOMBE_AL', SP.grid('BOMBE_ALLUMEE'), BUF_ROWB)
+    out += compile_sprite('BUF_ECLAIR', SP.grid('ECLAIR'), BUF_ROWB)        # pièce éclair
+    out += compile_sprite('SPR_GLACON', SP.grid('GLACON'))                  # ennemi gelé
     # images des ennemis par type (1 robot, 2 chauve-souris, 3 boule, 4 nuage)
     out.append("TYPIMG  FDB     SPR_ROBOT_1,SPR_ROBOT_2,SPR_CHAUVE_1,SPR_CHAUVE_2")
     out.append("        FDB     SPR_BOULE_1,SPR_BOULE_2,SPR_NUAGE_1,SPR_NUAGE_2")
@@ -176,5 +179,5 @@ if __name__ == '__main__':
     out.append("        RTS")
     out.append(f"BUFROW  EQU     {BUF_ROWB}")
     open('toboum_data.asm', 'w').write("\n".join(out) + "\n")
-    json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'decor': decors_px[DECOR],
+    json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'piece': PIECE, 'decor': decors_px[DECOR],
                'ordre': ORDRE, 'decors': decors_px}, open('toboum_niveau.json', 'w'))
