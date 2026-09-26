@@ -49,7 +49,7 @@ YMIN    EQU     8
 YMAX    EQU     176             ; sol : pieds en ligne 192
 NMAX    EQU     8
 ESIZE   EQU     16              ; P, Y, ancien P, ancien Y, dP, dY, image 1, image 2,
-*                                 fait, type, compteur
+*                                 fait, type, compteur, cumul de vitesse, temps au sol, futur type
 T_ROBOT EQU     1
 T_CHAUV EQU     2
 T_BOULE EQU     3
@@ -58,6 +58,14 @@ T_NUAGE EQU     4
 * (les 2/3 de l'aire de jeu) ; bas tenu double la gravité (saut court, chute rapide) ;
 * haut tenu en descente la divise par 2 (chute lente) ; un nouvel appui en l'air freine
 VMARCHE EQU     102             ; marche : 102/256 = 0,4 paire par top = 40 pixels/s
+* ennemis
+SPAWN0  EQU     150             ; une apparition toutes les 3 s au début du niveau...
+RAGEDT  EQU     500             ; ... puis toutes les 10 s :
+RAGESW  EQU     10              ;   0,2 s de moins entre deux apparitions
+RAGESP  EQU     8               ;   marcheurs un peu plus rapides
+RAGEMX  EQU     6               ;   6 fois au plus (au bout d'une minute)
+TRANSF  EQU     75              ; un robot au sol se transforme au bout de 1,5 s,
+TCLIGN  EQU     25              ; après avoir clignoté 0,5 s
 GRAV    EQU     $000E           ; 0,055 ligne/top²
 SAUT    EQU     $0378           ; 3,47 lignes/top au décollage
 CHUTEMX EQU     $0400           ; chute limitée à 4 lignes/top
@@ -238,13 +246,19 @@ NL2     STA     BIDX
         BLS     NL3
         LDA     #NMAX
 NL3     STA     NMAXLV
-        LDA     #1              ; ennemis plus rapides à partir du niveau 3
-        LDB     LEVELN
+        LDA     #128            ; ennemis plus rapides à partir du niveau 3
+        LDB     LEVELN          ; (vitesse /256 : un pas par top quand la somme déborde)
         CMPB    #3
         BHS     NL4
-        LDA     #3
-NL4     STA     SPDMASK
+        LDA     #64
+NL4     STA     ESPEED
+        LDA     #SPAWN0         ; la difficulté monte pendant le niveau (RAGETICK)
+        STA     SPDEF
+        LDX     #RAGEDT
+        STX     RAGET
+        CLR     RAGE
         CLR     NSPAWN
+        CLR     NTRANS
         CLR     CHAIN           ; chaîne de bombes allumées, jauge, pièce, gel
         CLR     PWR
         CLR     POWER
@@ -477,6 +491,7 @@ TL1     JSR     TOTOTICK
         BRA     TL3
 TL2     JSR     ENNTICK
         JSR     SPAWNTICK
+        JSR     RAGETICK
 TL3     JSR     COLLIDE
         JSR     BOMBCHK
         JMP     COINCHK
@@ -830,17 +845,89 @@ E_ROBOT LDA     ,U
         LDB     NEWY
 ER1     STB     1,U
         RTS
-ER2     LDA     12,U
-        ANDA    SPDMASK
-        BNE     ER9
+ER2     LDA     1,U             ; au sol : il clignote, puis se transforme
+        CMPA    #YMAX
+        BNE     ER4
+        INC     14,U
+        LDA     14,U
+        CMPA    #TRANSF
+        BHS     TRANSFORM
+        CMPA    #TRANSF-TCLIGN
+        BLO     ER4
+        BNE     ER3
+        LDA     NTRANS          ; ce qu'il va devenir : chauve-souris, boule, nuage...
+        ADDA    #T_CHAUV
+        STA     15,U
+        LDA     NTRANS
+        INCA
+        CMPA    #3
+        BLO     ER2B
+        CLRA
+ER2B    STA     NTRANS
+ER3     LDB     11,U            ; clignotement : son image / sa future image
+        LDA     14,U
+        BITA    #4
+        BEQ     ER3B
+        LDB     15,U
+ER3B    JSR     SETIMG
+ER4     JSR     ESTEP
+        BCC     ER9
         JMP     HMOVE
 ER9     RTS
 
+* le robot devient un volant (type en 15,U)
+TRANSFORM
+        LDB     15,U
+        STB     11,U
+        JSR     SETIMG
+        CLR     14,U
+        LDA     #-2             ; la boule repart vers le haut
+        STA     5,U
+        LDX     #SFX_TRANSF
+        JMP     PLAYSFX
+
+* pas de marche d'un ennemi ce top-ci ? (C = 1) : 13,U cumule ESPEED
+ESTEP   LDA     13,U
+        ADDA    ESPEED
+        STA     13,U
+        RTS
+
+* images de l'ennemi U pour le type B
+SETIMG  DECB
+        ASLB
+        ASLB
+        LDX     #TYPIMG
+        ABX
+        LDD     ,X
+        STD     6,U
+        LDD     2,X
+        STD     8,U
+        RTS
+
+* difficulté : toutes les 10 s, ennemis un peu plus rapides et apparitions plus fréquentes
+RAGETICK
+        LDX     RAGET
+        LEAX    -1,X
+        STX     RAGET
+        BNE     RG9
+        LDX     #RAGEDT
+        STX     RAGET
+        LDA     RAGE
+        CMPA    #RAGEMX
+        BHS     RG9
+        INC     RAGE
+        LDA     ESPEED
+        ADDA    #RAGESP
+        STA     ESPEED
+        LDA     SPDEF
+        SUBA    #RAGESW
+        STA     SPDEF
+RG9     RTS
+
 * chauve-souris : poursuit Toto sans traverser les plateformes ; si une plateforme
 * l'empêche de monter ou descendre vers lui, elle la contourne par le côté (dP)
-E_CHAUV LDA     12,U
-        ANDA    SPDMASK
-        BNE     EC2
+E_CHAUV JSR     ESTEP
+        BCC     EC2
         LDA     ,U              ; horizontal : vers Toto
         CMPA    ENTS
         BEQ     EC2
@@ -942,7 +1029,7 @@ HM1     NEG     4,U             ; demi-tour (sans bouger ce top-ci)
 SPAWNTICK
         DEC     SPT
         BNE     SW9
-        LDA     #150
+        LDA     SPDEF
         STA     SPT
         LDA     NENN
         CMPA    NMAXLV
@@ -959,6 +1046,8 @@ SPAWNTICK
         INCA
         STA     11,U
         CLR     12,U
+        CLR     13,U
+        CLR     14,U
         LDB     #8              ; côté opposé à Toto, en haut
         LDA     #1
         STA     4,U
@@ -981,15 +1070,7 @@ SW1     STB     ,U
 SW2     LDA     #$FF
         STA     2,U
         LDB     11,U            ; images du type
-        DECB
-        ASLB
-        ASLB
-        LDX     #TYPIMG
-        ABX
-        LDD     ,X
-        STD     6,U
-        LDD     2,X
-        STD     8,U
+        JMP     SETIMG
 SW9     RTS
 
 ****************************************************************
@@ -1242,15 +1323,7 @@ NORMIMGS
         LDU     #ENTS+ESIZE
 NI1     PSHS    B
         LDB     11,U
-        DECB
-        ASLB
-        ASLB
-        LDX     #TYPIMG
-        ABX
-        LDD     ,X
-        STD     6,U
-        LDD     2,X
-        STD     8,U
+        JSR     SETIMG
         LEAU    ESIZE,U
         PULS    B
         DECB
@@ -1605,6 +1678,8 @@ SFX_ECLAIR  FDB 8000,1200
             FCB 18
 SFX_MANGE   FDB 26000,-900
             FCB 8
+SFX_TRANSF  FDB 4000,1800
+            FCB 12
 
 SNDIRQ  PSHS    D
         LDD     TIMEACC         ; horloge : +1000 cycles par IRQ
@@ -1692,7 +1767,11 @@ LIVES   RMB     1
 LEVELB  RMB     1               ; niveau en BCD (affichage)
 LEVELN  RMB     1               ; niveau en binaire
 NMAXLV  RMB     1
-SPDMASK RMB     1
+ESPEED  RMB     1               ; vitesse des ennemis marcheurs (/256 paire par top)
+SPDEF   RMB     1               ; intervalle entre deux apparitions (tops)
+RAGET   RMB     2               ; tops avant la prochaine hausse de difficulté
+RAGE    RMB     1               ; hausses déjà faites dans ce niveau
+NTRANS  RMB     1               ; prochaine transformation d'un robot
 NSPAWN  RMB     1
 SPT     RMB     1
 INVUL   RMB     1

@@ -36,7 +36,8 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
 - **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 20, une pièce éclair apparaît au centre. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
 - **Un décor et une planche par niveau**, en boucle : Égypte (pyramides), Rome (deux corniches), Moscou (escalier), Paris (tour), Mont-Saint-Michel (terrasses). Chaque planche a ses plateformes, ses bombes, son ordre d'allumage et sa pièce éclair.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
-  - le **robot** tombe, puis marche sur les plateformes ;
+  - **La pression monte** : toutes les 10 s passées sur un niveau, les ennemis arrivent un peu plus souvent et les marcheurs accélèrent (6 fois au plus, jusqu'à une apparition toutes les 1,8 s).
+  - le **robot** tombe, puis marche sur les plateformes. S'il atteint le sol, il clignote puis **se transforme** en volant : chauve-souris, puis boule, puis nuage, à tour de rôle ;
   - la **chauve-souris** poursuit Toto ;
   - la **boule** rebondit ;
   - le **nuage** dérive et descend vers Toto.

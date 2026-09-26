@@ -89,12 +89,18 @@ check(diff == 0, f"décor propre à la place de la bombe ramassée ({diff} pixel
 
 # 7. les ennemis arrivent
 s = boot()
+types = {}; ymax = [0]
+def naissances(sim):
+    for k in range(1, sim.peek(S['NENN']) + 1): types.setdefault(k, sim.peek(E + 16 * k + 11))
+    ymax[0] = max(ymax[0], sim.peek(E + 17))
+s.hooks[S['UPDONE']] = naissances
 for i in range(6): s.mem.ram[S['INVUL']] = 250; s.run_frames(70)      # Toto invincible pendant l'observation
+del s.hooks[S['UPDONE']]
 check(s.peek(S['NENN']) >= 2, f"ennemis apparus : {s.peek(S['NENN'])}")
-types = [s.peek(E + 16 * k + 11) for k in range(1, s.peek(S['NENN']) + 1)]
-check(types[:2] == [1, 2], f"types en alternance (robot, chauve-souris...) : {types}")
+types = [types[k] for k in sorted(types)]
+check(types[:2] == [1, 2], f"types en alternance à l'apparition (robot, chauve-souris...) : {types}")
 rob = E + 16
-check(s.peek(rob + 1) > 20, f"le robot est tombé (ligne {s.peek(rob + 1)})")
+check(ymax[0] > 20, f"le robot est tombé (jusqu'à la ligne {ymax[0]})")
 
 # 8. contact avec un ennemi : une vie en moins, puis on repart sans ennemis
 s.mem.ram[S['INVUL']] = 0
@@ -275,6 +281,36 @@ s.run_frames(260)
 reste = [E + 16 * k for k in range(1, s.peek(S['NENN']) + 1)]
 check(s.peek(S['POWER']) == 0 and s.border == 0 and all(s.mem.read_word(b + 6) != S['SPR_GLACON'] for b in reste),
       "fin du gel : les ennemis reprennent leur apparence")
+
+# 16. un robot qui touche le sol clignote, puis devient un volant (chauve-souris, boule, nuage...)
+s = boot(); s.mem.ram[S['NMAXLV']] = 1
+while s.peek(S['NENN']) < 1: s.mem.ram[S['INVUL']] = 250; s.run_frames(10)
+rob = E + 16
+s.mem.ram[rob] = 20; s.mem.ram[rob + 1] = 176; s.mem.ram[rob + 14] = 0
+vus = []
+s.hooks[S['UPDONE']] = lambda sim: vus.append((sim.peek(rob + 11), sim.mem.read_word(rob + 6), abs(sim.peek(rob) - sim.peek(E)) + abs(sim.peek(rob + 1) - sim.peek(E + 1))))
+for i in range(12): s.mem.ram[S['INVUL']] = 250; s.run_frames(10)
+del s.hooks[S['UPDONE']]
+robot = [v for v in vus if v[0] == 1]
+imgs = {v[1] for v in robot}
+check(len(robot) > 50 and S['SPR_ROBOT_1'] in imgs and S['SPR_CHAUVE_1'] in imgs,
+      f"au sol, le robot marche puis clignote (robot / chauve-souris) avant de se transformer ({len(robot)} images en robot)")
+check(s.peek(rob + 11) == 2 and s.mem.read_word(rob + 6) == S['SPR_CHAUVE_1'], f"1re transformation : chauve-souris (type {s.peek(rob + 11)})")
+nt = s.peek(S['NTRANS'])
+check(nt == 1, f"la suivante sera une boule (NTRANS {nt})")
+ds = [v[2] for v in vus if v[0] == 2]
+check(len(ds) > 5 and ds[-1] < ds[0] and s.peek(S['GSTATE']) == 0, f"la chauve-souris fonce sur Toto (écart {ds[0]} -> {ds[-1]}), pas de plantage")
+
+# 17. difficulté : toutes les 10 s, marcheurs plus rapides et apparitions plus fréquentes (6 fois au plus)
+s = boot()
+e0, sp0 = s.peek(S['ESPEED']), s.peek(S['SPDEF'])
+check((e0, sp0) == (64, 150), f"niveau 1 : vitesse {e0}/256, une apparition toutes les {sp0} tops")
+for i in range(11): s.mem.ram[S['INVUL']] = 250; s.run_frames(50)
+check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (72, 140, 1), f"après 10 s : vitesse {s.peek(S['ESPEED'])}, apparitions {s.peek(S['SPDEF'])}")
+for i in range(60): s.mem.ram[S['INVUL']] = 250; s.run_frames(50)
+check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (112, 90, 6), f"après 70 s : plafond (vitesse {s.peek(S['ESPEED'])}, apparitions {s.peek(S['SPDEF'])})")
+finir_niveau(s)
+check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (64, 150, 0), "niveau suivant : on repart du début")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)
