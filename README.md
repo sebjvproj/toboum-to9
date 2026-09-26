@@ -12,7 +12,7 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 
 ![En jeu](apercus/toboum.gif)
 
-> TOboum est un projet amateur, sans lien avec Koei Tecmo ni avec Thomson. Bomb Jack est une marque de Koei Tecmo. Le jeu reprend l'idée et les règles générales de Bomb Jack, mais aucune de ses données : graphismes, sons, niveaux et code ont été créés pour ce projet.
+> TOboum est un projet amateur, sans lien avec Koei Tecmo, Thomson ou Infogrames. Bomb Jack est une marque de Koei Tecmo. Le jeu reprend l'idée et les règles générales de Bomb Jack, mais aucune de ses données : graphismes, sons, niveaux et code ont été créés pour ce projet.
 
 > Version en cours de développement.
 
