@@ -21,6 +21,7 @@ def pixels(s):
 def boot(fd=True):
     s = TO9('TOBOUM.BIN', fd='TOBOUM.fd' if fd else None); s.run_frames(60); return s
 def poke(s, lab, v, off=0): s.mem.ram[S[lab] + off] = v & 0xFF
+def planche(s): return NIV['planches'][(s.peek(S['LEVELN']) - 1) % len(NIV['planches'])]
 
 # 1. départ
 s = boot()
@@ -139,36 +140,41 @@ check(piles == {0x9FF0} and (0xA000 <= pc < 0xE000 or pc >= 0xE800),
       f"40 s de jeu au hasard : pile toujours {sorted(hex(v) for v in piles)} en fin de tour, score {score(s)}, niveau {s.peek(S['LEVELB'])}")
 
 
-# 12. personne ne traverse les plateformes : 1 min, 8 ennemis, Toto piloté au hasard (invincible)
-PL = [(x // 2, (x + w) // 2, y) for x, y, w in NIV['plateformes']]
-def dans_plateforme(p, y):
+# 12. personne ne traverse les plateformes : 8 ennemis, Toto piloté au hasard (invincible), sur chaque planche
+def dans_plateforme(p, y, PL):
     return any(p + 2 >= p0 and p + 1 < p1 and y <= yt + 3 and y + 15 >= yt for p0, p1, yt in PL)
-s = boot(); s.mem.ram[S['NMAXLV']] = 8
-viol = []; vus = [0]
-def controle(sim):
-    for k in range(sim.peek(S['NENN']) + 1):
-        b = E + 16 * k; p, y = sim.peek(b), sim.peek(b + 1)
-        if dans_plateforme(p, y): viol.append((k, sim.peek(b + 11), p, y))
-    vus[0] += 1
-s.hooks[S['UPDONE']] = controle
-random.seed(7)
-for i in range(600):
-    s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 20)
-    if random.random() < 0.3: s.hold(random.choice([0x08, 0x09, 0x0B, 0x0B, 0x20]), random.randint(3, 40))
-    s.run_frames(5)
-check(not viol and s.peek(S['NENN']) == 8, f"1 min avec 8 ennemis : aucun sprite dans une plateforme ({vus[0]} images contrôlées, {len(viol)} fautes {viol[:3]})")
+def sans_traversee(s, tours, graine):
+    PL = [(x // 2, (x + w) // 2, y) for x, y, w in planche(s)['plats']]
+    s.mem.ram[S['NMAXLV']] = 8
+    viol = []; vus = [0]
+    def controle(sim):
+        for k in range(sim.peek(S['NENN']) + 1):
+            b = E + 16 * k; p, y = sim.peek(b), sim.peek(b + 1)
+            if dans_plateforme(p, y, PL): viol.append((k, sim.peek(b + 11), p, y))
+        vus[0] += 1
+    s.hooks[S['UPDONE']] = controle
+    random.seed(graine)
+    for i in range(tours):
+        s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 20)
+        if random.random() < 0.3: s.hold(random.choice([0x08, 0x09, 0x0B, 0x0B, 0x20]), random.randint(3, 40))
+        s.run_frames(5)
+    del s.hooks[S['UPDONE']]
+    return viol, vus[0]
+s = boot()
+viol, vus = sans_traversee(s, 600, 7)
+check(not viol and s.peek(S['NENN']) == 8, f"1 min avec 8 ennemis : aucun sprite dans une plateforme ({vus} images contrôlées, {len(viol)} fautes {viol[:3]})")
 
 # 13. un décor par niveau : lu sur la disquette, palette comprise ; retour au 1er après le 5e
 def finir_niveau(s):
     for i in range(18): s.mem.ram[S['BSTATE'] + i] = 0
     s.mem.ram[S['BSTATE'] + 17] = 1; poke(s, 'BLEFT', 1)
-    bx, by = NIV['bombes'][17]
+    bx, by = planche(s)['bombes'][17]
     poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
     s.run_frames(3); s.run_frames(200)
 def ecart_decor(s, nom):
     """pixels de l'aire de jeu différents du décor attendu (hors bombes et Toto)"""
     px = pixels(s); ref = NIV['decors'][nom]
-    hors = {(y, x) for bx, by in NIV['bombes'] for y in range(by, by + 16) for x in range(bx, bx + 8)}
+    hors = {(y, x) for bx, by in planche(s)['bombes'] for y in range(by, by + 16) for x in range(bx, bx + 8)}
     for k in range(s.peek(S['NENN']) + 1):            # Toto et ennemis, là où ils sont dessinés
         b = E + 16 * k; p, y = s.peek(b + 2), s.peek(b + 3)
         if p != 0xFF: hors |= {(yy, xx) for yy in range(y, y + 16) for xx in range(2 * p, 2 * p + 8)}
@@ -193,6 +199,35 @@ lv = [round(255 * (v / 15) ** (1 / 2.8)) for v in range(16)]
 check(s.palette_rgb()[:7] == [tuple(lv[c] for c in t) for t in pal_attendue[:7]], "niveau 2 : palette du décor")
 for n in range(3, 7): finir_niveau(s)
 check(s.peek(S['LEVELB']) == 6 and ecart_decor(s, ordre[0]) == 0, f"niveau 6 : retour à {ordre[0]}")
+
+# 13 bis. une planche par niveau : départ, plateformes dessinées et solides, bombes à leur place
+def finir_niveau_propre(s):
+    finir_niveau(s)
+    for i in range(50):
+        if s.peek(S['GSTATE']) == 0: break
+        s.run_frames(10)
+s = boot()
+for n in range(1, 6):
+    pl = planche(s); nom = pl['nom']
+    check(s.peek(S['LEVELN']) == n and (P(s), Y(s)) == (pl['depart'][0] // 2, pl['depart'][1]) and s.peek(S['ONGND']) == 1,
+          f"niveau {n} ({nom}) : Toto au départ {pl['depart']}, au sol")
+    px = pixels(s)
+    bombes = sum(sum(px[by + j][bx + i] != NIV['decors'][NIV['ordre'][n - 1]][by + j][bx + i] for j in range(12) for i in range(8)) > 20
+                 for bx, by in pl['bombes'])
+    check(bombes == 18, f"niveau {n} : les 18 bombes dessinées à leur place ({bombes})")
+    poses = []
+    for x, y, w in pl['plats']:
+        s.mem.ram[S['INVUL']] = 250
+        p = (x + w // 2) // 2 - 2
+        poke(s, 'ENTS', p); poke(s, 'ENTS', y - 40, 1); poke(s, 'ONGND', 0)
+        s.mem.write_word(S['TVY'], 0); s.run_frames(40)
+        poses.append(s.peek(S['ONGND']) == 1 and Y(s) == y - 16 and P(s) == p)
+    check(all(poses), f"niveau {n} : Toto se pose sur chacune des {len(poses)} plateformes {poses}")
+    viol, vus = sans_traversee(s, 150, n)
+    check(not viol, f"niveau {n} : 15 s avec 8 ennemis, aucun sprite dans une plateforme ({len(viol)} fautes {viol[:3]})")
+    s.mem.ram[S['INVUL']] = 250
+    finir_niveau_propre(s)
+
 s = boot(fd=False)
 px = pixels(s)
 hors = {(y, x) for bx, by in NIV['bombes'] for y in range(by, by + 16) for x in range(bx, bx + 8)}

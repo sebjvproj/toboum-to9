@@ -194,7 +194,8 @@ NEWGAME LDD     #0
 
 * nouveau niveau : décor, bombes (dessinées dans la copie du décor), Toto au départ
 NEWLEVEL
-        JSR     TOTORESET       ; d'abord : Toto et ennemis « jamais dessinés »
+        JSR     SETLAYOUT       ; planche du niveau : plateformes, bombes, départ
+        JSR     TOTORESET       ; puis : Toto et ennemis « jamais dessinés »
         CLR     NENN
         CLR     BORDER
         LDX     #PALNOIR        ; écran noir pendant la préparation
@@ -256,6 +257,28 @@ NL4     STA     SPDMASK
         STA     DIRTY
         LDX     #SFX_NIVEAU
         JMP     PLAYSFX
+
+* planche du niveau (la même que le décor : n° (niveau - 1) modulo NDECOR) -> pointeurs
+SETLAYOUT
+        LDA     LEVELN
+        DECA
+SL1     CMPA    #NDECOR
+        BLO     SL2
+        SUBA    #NDECOR
+        BRA     SL1
+SL2     LDB     #6
+        MUL
+        LDX     #LAYTAB
+        ABX
+        LDU     ,X              ; plateformes : nombre, puis triplets
+        LDA     ,U+
+        STA     NPLATV
+        STU     PLATPTR
+        LDD     2,X
+        STD     BOMBPTR
+        LDD     4,X
+        STD     DEPPOS
+        RTS
 
 * décor du niveau : n° (niveau - 1) modulo NDECOR, lu sur la disquette (DECORS.DAT, secteurs
 * bruts) dans la copie de l'aire de jeu, libre à ce moment-là (SAVEBUF la réécrit ensuite).
@@ -416,7 +439,7 @@ TR1     LDA     #$FF
         DECB
         BNE     TR1
         LDU     #ENTS
-        LDD     #DEPP*256+DEPY
+        LDD     DEPPOS          ; départ de la planche
         STD     ,U
         CLR     TYF
         LDD     #0
@@ -650,8 +673,8 @@ LANDCHK STA     CP
         LDB     #YMAX
         ORCC    #1
         RTS
-LC1     LDX     #PLATS
-        LDA     #NPLAT
+LC1     LDX     PLATPTR
+        LDA     NPLATV 
         STA     CNT
 LC2     JSR     OVERLAP
         BCC     LC3
@@ -676,8 +699,8 @@ LC3     LEAX    3,X
 * A = paire, B = ancienne ligne, NEWY (montée) : C = 1 et B = ligne sous la plateforme
 HEADCHK STA     CP
         STB     CY
-        LDX     #PLATS
-        LDA     #NPLAT
+        LDX     PLATPTR
+        LDA     NPLATV 
         STA     CNT
 HC1     JSR     OVERLAP
         BCC     HC2
@@ -702,8 +725,8 @@ SUPPORT CMPB    #YMAX
         STA     CP
         ADDB    #16
         STB     CYB             ; ligne des pieds
-        LDX     #PLATS
-        LDB     #NPLAT
+        LDX     PLATPTR
+        LDB     NPLATV 
 SU1     LDA     CYB
         CMPA    2,X
         BNE     SU2
@@ -742,8 +765,8 @@ BLOCKED STB     CY
         STA     CP2             ; paire + 2
         INCB
         STB     CP1             ; paire + 1
-        LDX     #PLATS
-        LDB     #NPLAT
+        LDX     PLATPTR
+        LDB     NPLATV 
 BK1     LDA     CYB             ; Y + 15 >= dessus
         CMPA    2,X
         BLO     BK2
@@ -1053,7 +1076,7 @@ BC1     LDX     #BSTATE
         LDA     BIDX
         TST     A,X
         BEQ     BC3
-        LDX     #BOMBS
+        LDX     BOMBPTR
         ASLA
         LEAX    A,X
         LDA     ,X              ; |paire - Toto| <= 2
@@ -1158,13 +1181,14 @@ CM9     RTS
 * Toto prend la pièce : 5 s de gel (250 tops), ennemis en glaçons, bord bleu
 COINCHK TST     COINON
         BEQ     PC9
-        LDA     BOMBS+NBOMB*2   ; |paire - Toto| <= 2 et |ligne - Toto| < 12
+        LDX     BOMBPTR         ; la pièce suit les 18 bombes dans la table
+        LDA     NBOMB*2,X       ; |paire - Toto| <= 2 et |ligne - Toto| < 12
         SUBA    ENTS
         BPL     PC1
         NEGA
 PC1     CMPA    #2
         BHI     PC9
-        LDA     BOMBS+NBOMB*2+1
+        LDA     NBOMB*2+1,X
         SUBA    ENTS+1
         BPL     PC2
         NEGA
@@ -1293,7 +1317,7 @@ EATPTS  FCB     $00,$01,$00,$00,$02,$00,$00,$03,$00,$00,$05,$00
         FCB     $00,$08,$00,$00,$12,$00,$00,$20,$00
 
 * X = adresse de la bombe BIDX dans la copie du décor (banque A) ; A = paire, B = ligne
-BOMBADR LDX     #BOMBS
+BOMBADR LDX     BOMBPTR
         LDA     BIDX
         ASLA
         LEAX    A,X
@@ -1695,6 +1719,10 @@ COINON  RMB     1               ; pièce éclair présente
 POWER   RMB     1               ; gel en cours (tops restants)
 EATCNT  RMB     1               ; glaçons mangés pendant ce gel
 PALPTR  RMB     2               ; palette courante
+PLATPTR RMB     2               ; planche courante : plateformes (triplets)
+NPLATV  RMB     1               ;   nombre de plateformes
+BOMBPTR RMB     2               ;   bombes puis pièce éclair
+DEPPOS  RMB     2               ;   départ de Toto (paire, ligne)
 NEWPAL  RMB     2               ; palette du décor en préparation
 PALRAM  RMB     32              ; palette d'un décor lu sur la disquette
 LZPA    RMB     2               ; décor compressé : banque A

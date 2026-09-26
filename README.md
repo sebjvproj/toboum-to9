@@ -34,7 +34,7 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
 - **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante, toujours dans le même ordre : il y a un parcours idéal à trouver. Quand tout est ramassé, on passe au niveau suivant.
 - **Bonus de chaîne** : en fin de niveau, 15 bombes allumées ramassées rapportent 10 000 points, 16 en rapportent 20 000, 17 en rapportent 30 000 et les 18, 50 000 (bord jaune).
 - **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 20, une pièce éclair apparaît au centre. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
-- **Un décor par niveau**, en boucle : Égypte, Rome, Moscou, Paris, Mont-Saint-Michel.
+- **Un décor et une planche par niveau**, en boucle : Égypte (pyramides), Rome (deux corniches), Moscou (escalier), Paris (tour), Mont-Saint-Michel (terrasses). Chaque planche a ses plateformes, ses bombes, son ordre d'allumage et sa pièce éclair.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
   - le **robot** tombe, puis marche sur les plateformes ;
   - la **chauve-souris** poursuit Toto ;
@@ -62,6 +62,7 @@ cd test
 python3 test_jeu.py         # saut, vol plané, bombes, ennemis, vies, niveaux, fin de partie, 40 s au hasard
 python3 scintillement.py    # sprites entiers à l'écran avec 2 à 8 ennemis
 python3 film.py             # petit film -> apercus/toboum.gif
+python3 niveaux.py          # les 5 niveaux -> apercus/niveaux.png
 ```
 
 Mesures dans le simulateur, son compris :
@@ -97,7 +98,7 @@ Pièges rencontrés, utiles pour d'autres projets TO9 :
 
 | Dossier | Contenu |
 |---|---|
-| `source/` | `toboum.asm` (le jeu), `moteur.asm` (le moteur de sprites), `donnees.py` (décor, sprites compilés, tables), `make_fd.py` (disquette) |
+| `source/` | `toboum.asm` (le jeu), `moteur.asm` (le moteur de sprites), `donnees.py` (décors, planches, sprites compilés, tables), `make_fd.py` (disquette) |
 | `outils/` | `sprites.py` (les sprites dessinés en lettres), `convertir_decor.py` (image → décor TO9), `lz.py`, `police.py` |
 | `graphismes/` | décors sources, décors convertis, guide pour en générer d'autres |
 | `test/` | simulateur TO9 et tests |

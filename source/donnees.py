@@ -15,13 +15,54 @@ DECOR = sys.argv[1] if len(sys.argv) > 1 else 'egypte'                  # décor
 BUF_ROWB = 29                                      # octets par ligne et par banque dans la copie du décor
 BLANC, JAUNE = SP.CODE['w'], SP.CODE['y']
 
-# disposition : plateformes (x, y, largeur en pixels) et bombes (x, y), x multiple de 4
-PLATEFORMES = [(20, 60, 32), (72, 104, 36), (24, 150, 32)]
-BOMBES = [(12, 12), (24, 12), (36, 12), (84, 12), (96, 12), (108, 12),
-          (12, 80), (12, 100), (12, 120), (112, 70), (112, 90), (112, 110),
-          (24, 44), (36, 44), (76, 88), (92, 88), (28, 134), (44, 134)]
-DEPART = (60, 176)                                 # Toto au départ (x pixels, y)
-PIECE = (60, 76)                                   # pièce éclair : au centre, loin des bombes et plateformes
+# planches (une par décor, dans l'ordre des niveaux) : plateformes (x, y, largeur en pixels),
+# 18 bombes (x, y) dans l'ordre d'allumage, pièce éclair (x, y), départ de Toto (x, y) ;
+# x multiple de 4 pour les bombes et la pièce ; aire de jeu : sprites en x 8..116, y 8..176
+def rangee(x0, y, n, dx=12): return [(x0 + i * dx, y) for i in range(n)]
+def colonne(x, y0, n, dy=30): return [(x, y0 + i * dy) for i in range(n)]
+PLANCHES = [
+    dict(nom='pyramides',                          # la planche d'origine
+         plats=[(20, 60, 32), (72, 104, 36), (24, 150, 32)],
+         bombes=rangee(12, 12, 3) + rangee(84, 12, 3) + colonne(12, 80, 3, 20) + colonne(112, 70, 3, 20)
+                + [(24, 44), (36, 44), (76, 88), (92, 88), (28, 134), (44, 134)],
+         piece=(60, 76), depart=(60, 176)),
+    dict(nom='deux corniches',
+         plats=[(12, 72, 28), (88, 72, 28), (48, 124, 32)],
+         bombes=rangee(44, 20, 3) + [(12, 56), (24, 56), (92, 56), (104, 56)] + rangee(52, 108, 3)
+                + [(8, 100), (8, 130), (112, 100), (112, 130)] + [(24, 176), (40, 176), (84, 176), (100, 176)],
+         piece=(60, 84), depart=(60, 176)),
+    dict(nom='escalier',
+         plats=[(12, 150, 28), (44, 110, 28), (76, 70, 28)],
+         bombes=rangee(12, 24, 3) + [(16, 134), (28, 134), (48, 94), (60, 94), (80, 54), (92, 54)]
+                + colonne(112, 90, 3) + [(88, 24), (100, 24), (24, 176), (88, 176), (100, 176), (84, 110)],
+         piece=(20, 90), depart=(60, 176)),
+    dict(nom='tour',
+         plats=[(48, 150, 32), (48, 100, 32), (48, 50, 32)],
+         bombes=colonne(12, 30, 5) + colonne(108, 30, 5) + [(52, 134), (68, 134), (52, 84), (68, 84), (52, 34), (68, 34)]
+                + [(24, 176), (96, 176)],
+         piece=(60, 112), depart=(60, 176)),
+    dict(nom='terrasses',
+         plats=[(8, 80, 40), (76, 80, 40), (40, 136, 40)],
+         bombes=rangee(16, 20, 3) + rangee(76, 20, 3) + rangee(12, 64, 3) + rangee(80, 64, 3)
+                + rangee(48, 120, 3) + [(16, 176), (100, 176), (60, 40)],
+         piece=(60, 92), depart=(60, 176)),
+]
+NBOMB = 18
+
+def verifie(pl):
+    """une planche est-elle cohérente ? (bornes, chevauchements, départ libre)"""
+    def croise(a, b):
+        return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+    plats = [(x, y, w, 4) for x, y, w in pl['plats']]
+    objets = [(x, y, 8, 16) for x, y in pl['bombes'] + [pl['piece']]]
+    assert len(pl['bombes']) == NBOMB, (pl['nom'], len(pl['bombes']))
+    for x, y, w, h in plats: assert 8 <= x and x + w <= 124 and 24 <= y <= 180, (pl['nom'], 'plateforme', x, y)
+    for i, o in enumerate(objets):
+        assert o[0] % 4 == 0 and 8 <= o[0] <= 116 and 8 <= o[1] <= 176, (pl['nom'], 'objet hors limites', o)
+        for p in plats: assert not croise(o, p), (pl['nom'], 'objet dans une plateforme', o, p)
+        for o2 in objets[i + 1:]: assert not croise(o, o2), (pl['nom'], 'objets qui se chevauchent', o, o2)
+    d = (pl['depart'][0], pl['depart'][1], 8, 16)
+    for o in objets: assert not croise(d, (o[0] - 4, o[1], 16, 16)), (pl['nom'], 'départ trop près d\'un objet', o)
 
 def charge_decor(nom):
     """décor converti par outils/convertir_decor.py -> (pixels[200][160], niveaux TO9 de la palette)"""
@@ -95,11 +136,10 @@ def miroir(g): return [list(reversed(r)) for r in g]
 
 if __name__ == '__main__':
     os.chdir(HERE)
-    for x, y in BOMBES: assert x % 4 == 0, 'bombes sur une paire paire (x multiple de 4)'
-    def compose(nom):
-        """décor + plateformes + textes du panneau -> (pixels, palette TO9 32 octets, LZ banque A, LZ banque B)"""
+    def compose(nom, pl):
+        """décor + plateformes de la planche + textes du panneau -> (pixels, palette, LZ A, LZ B)"""
         px, lv = charge_decor(nom)
-        for p in PLATEFORMES: plateforme(px, *p)
+        for p in pl['plats']: plateforme(px, *p)
         for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
             texte(px, 131, y, t, JAUNE)
         pal = bytearray()
@@ -128,8 +168,9 @@ if __name__ == '__main__':
     # sur la disquette : par décor, palette (32) + position de la banque B (2) + LZ A + LZ B,
     # à partir d'un début de secteur ; DECTAB = (1er secteur, nombre de secteurs) par décor
     dat = bytearray(); tab = []
-    for nom in ORDRE:
-        pxd, pal, ca, cb = compose(nom); decors_px[nom] = pxd
+    for k, nom in enumerate(ORDRE):
+        verifie(PLANCHES[k])
+        pxd, pal, ca, cb = compose(nom, PLANCHES[k]); decors_px[nom] = pxd
         blob = pal + (34 + len(ca)).to_bytes(2, 'big') + ca + cb
         blob += bytes(-len(blob) % 256)
         tab += [len(dat) // 256, len(blob) // 256]; dat += blob
@@ -140,12 +181,17 @@ if __name__ == '__main__':
     out.append("* décors des niveaux 1, 2, 3... : " + ", ".join(ORDRE))
     db("DECTAB", tab, 8)
     # plateformes : paire de début, paire de fin (exclue), ligne du dessus
-    out.append(f"NPLAT   EQU     {len(PLATEFORMES)}")
-    db("PLATS", sum([[x // 2, (x + w) // 2, y] for x, y, w in PLATEFORMES], []), 12)
-    out.append(f"NBOMB   EQU     {len(BOMBES)}")
-    db("BOMBS", sum([[x // 2, y] for x, y in BOMBES + [PIECE]], []), 12)   # (la pièce éclair en dernier)
-    out.append(f"DEPP    EQU     {DEPART[0] // 2}")
-    out.append(f"DEPY    EQU     {DEPART[1]}")
+    # planches : plateformes (nombre, puis paire début, paire fin exclue, ligne du dessus),
+    # bombes + pièce éclair (paire, ligne), départ (paire, ligne) ; LAYTAB : 6 octets par planche
+    out.append(f"NBOMB   EQU     {NBOMB}")
+    for k, pl in enumerate(PLANCHES):
+        out.append(f"* planche {k + 1} : {pl['nom']}")
+        db(f"LAY{k}_PLATS", [len(pl['plats'])] + sum([[x // 2, (x + w) // 2, y] for x, y, w in pl['plats']], []), 13)
+        db(f"LAY{k}_BOMBS", sum([[x // 2, y] for x, y in pl['bombes'] + [pl['piece']]], []), 12)
+    out.append("LAYTAB")
+    for k, pl in enumerate(PLANCHES):
+        out.append(f"        FDB     LAY{k}_PLATS,LAY{k}_BOMBS")
+        out.append(f"        FCB     {pl['depart'][0] // 2},{pl['depart'][1]}")
     # chiffres 3x5 : une ligne = 3 bits (bit 2 = pixel de gauche)
     db("DIGITS", [int(F[str(d)][r * 3:r * 3 + 3], 2) for d in range(10) for r in range(5)], 15)
     # sprites compilés
@@ -179,5 +225,7 @@ if __name__ == '__main__':
     out.append("        RTS")
     out.append(f"BUFROW  EQU     {BUF_ROWB}")
     open('toboum_data.asm', 'w').write("\n".join(out) + "\n")
-    json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'piece': PIECE, 'decor': decors_px[DECOR],
+    P0 = PLANCHES[0]
+    json.dump({'planches': PLANCHES, 'plateformes': P0['plats'], 'bombes': P0['bombes'], 'depart': P0['depart'],
+               'piece': P0['piece'], 'decor': decors_px[DECOR],
                'ordre': ORDRE, 'decors': decors_px}, open('toboum_niveau.json', 'w'))
