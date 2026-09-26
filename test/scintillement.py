@@ -2,7 +2,8 @@
 faisceau (ce que montre un vrai téléviseur). Pour chaque image et chaque sprite, on vérifie qu'il
 apparaît entier (90 % de ses pixels visibles, ceux cachés par un autre sprite exceptés) à l'une
 de ses deux dernières positions dessinées.      python3 scintillement.py [nb_ennemis] [--piece]
-(--piece : la pièce éclair, qui rebondit, est à l'écran en plus des ennemis)"""
+(--piece : la pièce éclair, qui rebondit, est à l'écran en plus des ennemis ;
+ --libre : cadence libre, comme après la touche F, au lieu des 25 images/s fixes)"""
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'outils'))
@@ -19,9 +20,9 @@ NOMS = {'TOTO_M1D': 'TOTO_MARCHE', 'TOTO_M2D': 'TOTO_MARCHE_2', 'TOTO_M1G': '-TO
         'NUAGE_1': 'NUAGE_1', 'NUAGE_2': 'NUAGE_2', 'ECLAIR': 'ECLAIR'}
 GRILLE = {S['SPR_' + lab]: (miroir(SP.grid(n[1:])) if n.startswith('-') else SP.grid(n)) for lab, n in NOMS.items()}
 
-def mesure(n, images=100, piece=False):
+def mesure(n, images=100, piece=False, libre=False):
     s = TO9('TOBOUM.BIN', fd='TOBOUM.fd'); s.run_frames(50); s.key(0x0D); s.run_frames(120)   # écran titre : une touche, puis le niveau se charge
-    s.mem.ram[S['NMAXLV']] = n
+    s.mem.ram[S['NMAXLV']] = n; s.mem.ram[S['FPSLIB']] = int(libre)
     while s.peek(S['NENN']) < n:                    # les ennemis arrivent (Toto invincible)
         s.mem.ram[S['INVUL']] = 250; s.mem.ram[S['SPT']] = min(s.peek(S['SPT']), 10); s.run_frames(10)
     if piece:                                       # jauge pleine, puis Toto sur la bombe allumée
@@ -58,7 +59,7 @@ def mesure(n, images=100, piece=False):
     return ok, total, ((s.peek(S['ITER']) - it0) % 256) / images * 50
 
 if __name__ == '__main__':
-    args = [a for a in sys.argv[1:] if a != '--piece']; piece = '--piece' in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]; piece = '--piece' in sys.argv; libre = '--libre' in sys.argv
     for n in ([int(args[0])] if args else (2, 4, 6, 8)):
-        ok, total, ips = mesure(n, piece=piece)
-        print(f'{n} ennemis{" + pièce" if piece else ""} : sprites entiers à l\'écran {ok}/{total} = {ok / total:.1%}, {ips:.0f} images/s')
+        ok, total, ips = mesure(n, piece=piece, libre=libre)
+        print(f'{n} ennemis{" + pièce" if piece else ""}{" (cadence libre)" if libre else ""} : sprites entiers à l\'écran {ok}/{total} = {ok / total:.1%}, {ips:.0f} images/s')

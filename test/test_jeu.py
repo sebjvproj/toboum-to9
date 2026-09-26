@@ -353,7 +353,7 @@ for i in range(12): s.mem.ram[S['INVUL']] = 250; s.run_frames(10)
 del s.hooks[S['UPDONE']]
 robot = [v for v in vus if v[0] == 1]
 imgs = {v[1] for v in robot}
-check(len(robot) > 50 and S['SPR_ROBOT_1'] in imgs and S['SPR_CHAUVE_1'] in imgs,
+check(len(robot) > 25 and S['SPR_ROBOT_1'] in imgs and S['SPR_CHAUVE_1'] in imgs,
       f"au sol, le robot marche puis clignote (robot / chauve-souris) avant de se transformer ({len(robot)} images en robot)")
 check(s.peek(rob + 11) == 2 and s.mem.read_word(rob + 6) == S['SPR_CHAUVE_1'], f"1re transformation : chauve-souris (type {s.peek(rob + 11)})")
 nt = s.peek(S['NTRANS'])
@@ -372,7 +372,7 @@ check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (112, 90, 
 finir_niveau(s)
 check((s.peek(S['ESPEED']), s.peek(S['SPDEF']), s.peek(S['RAGE'])) == (64, 150, 0), "niveau suivant : on repart du début")
 
-# 17 bis. la pièce rebondit en diagonale dans l'aire de jeu ; elle survit à un nouvel ennemi et à une vie perdue
+# 17 bis. la pièce rebondit en diagonale dans l'aire de jeu et sur les plateformes ; elle survit à un nouvel ennemi et à une vie perdue
 s = boot(); s.mem.ram[S['NMAXLV']] = 2
 for n in range(4): s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
 depart = (s.peek(piece(s)), s.peek(piece(s) + 1))
@@ -380,15 +380,22 @@ pc = planche(s)['piece']
 check(s.peek(S['COINON']) == 1 and abs(depart[0] - pc[0] // 2) <= 1 and abs(depart[1] - pc[1]) <= 6,
       f"la pièce part de la place prévue par la planche {depart}")
 pos = []; nenn = []
-s.hooks[S['UPDONE']] = lambda sim: (pos.append((sim.peek(piece(sim)), sim.peek(piece(sim) + 1))), nenn.append(sim.peek(S['NENN'])))
-for i in range(100):                               # 20 s, Toto invincible et loin (en bas à gauche)
-    s.mem.ram[S['INVUL']] = 250; poke(s, 'ENTS', 4); poke(s, 'ENTS', 176, 1); s.run_frames(10)
+def suivi(sim):                                    # Toto toujours dans le coin opposé à la pièce
+    p, y = sim.peek(piece(sim)), sim.peek(piece(sim) + 1)
+    pos.append((p, y)); nenn.append(sim.peek(S['NENN']))
+    sim.mem.ram[E] = 58 if p < 31 else 4; sim.mem.ram[E + 1] = 176 if y < 92 else 8
+s.hooks[S['UPDONE']] = suivi
+for i in range(100):                               # 20 s, Toto invincible
+    s.mem.ram[S['INVUL']] = 250; s.run_frames(10)
     if s.peek(S['COINON']) == 0: break
 del s.hooks[S['UPDONE']]
 ps = [p for p, y in pos]; ys = [y for p, y in pos]
 check(s.peek(S['COINON']) == 1 and min(ps) >= 4 and max(ps) <= 58 and min(ys) >= 8 and max(ys) <= 176,
       f"20 s : la pièce reste dans l'aire de jeu (paires {min(ps)}-{max(ps)}, lignes {min(ys)}-{max(ys)})")
-check(max(ys) - min(ys) > 150 and max(ps) - min(ps) > 20, "elle parcourt l'écran (rebonds en haut, en bas, sur les côtés)")
+check(max(ys) - min(ys) > 100 and max(ps) - min(ps) > 20, f"elle parcourt l'écran (rebonds ; lignes {min(ys)}-{max(ys)})")
+PLc = [(x // 2, (x + w) // 2, y) for x, y, w in planche(s)['plats']]
+dedans = [(p, y) for p, y in pos if dans_plateforme(p, y, PLc)]
+check(not dedans, f"elle ne traverse jamais une plateforme ({len(pos)} positions, {len(dedans)} fautes {dedans[:3]})")
 check(max(nenn) == 2 and piece_dessinee(s) > 20, f"des ennemis sont apparus ({max(nenn)}) : la pièce est toujours là et dessinée")
 k = 1; s.mem.ram[S['INVUL']] = 0; s.mem.ram[E + 16] = P(s); s.mem.ram[E + 17] = Y(s); s.run_frames(110)
 check(s.peek(S['LIVES']) == 2 and s.peek(S['NENN']) == 0 and s.peek(S['COINON']) == 1 and piece_dessinee(s) > 20,
@@ -396,14 +403,16 @@ check(s.peek(S['LIVES']) == 2 and s.peek(S['NENN']) == 0 and s.peek(S['COINON'])
 sc0 = int(score(s)); s.mem.ram[S['INVUL']] = 250; prendre(s, 18)
 check(s.peek(S['COINON']) == 0 and s.peek(S['POWER']) > 200, f"attrapée là où elle est : gel")
 
-# 18. pièce pas prise en fin de niveau : elle est rendue dès le niveau suivant
+# 18. nouveau niveau : tout repart de zéro (pièce non prise, jauge)
 s = boot()
 for n in range(4): s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
 check(s.peek(S['COINON']) == 1, "pièce apparue au niveau 1")
 finir_niveau(s)
-dessin = piece_dessinee(s, planche(s))
-check(s.peek(S['LEVELN']) == 2 and s.peek(S['COINON']) == 1 and dessin > 20,
-      f"niveau 2 : la pièce non prise est là d'emblée, à la place prévue par la planche ({dessin} pixels)")
+check(s.peek(S['LEVELN']) == 2 and s.peek(S['COINON']) == 0 and s.peek(S['PWR']) == 0 and s.peek(S['NACT']) == s.peek(S['NENN']) + 1,
+      "niveau 2 : ni pièce ni jauge")
+for n in range(3): s.mem.ram[S['INVUL']] = 250; prendre(s, s.peek(S['LIT']))
+check(s.peek(S['COINON']) == 0 and s.peek(S['PWR']) == 6, f"la jauge repart de 0 ({s.peek(S['PWR'])} après 3 bombes allumées)")
 
 # 19. mode invincible : G (bord blanc, contacts ignorés), N = niveau suivant, pas de record
 s = boot()
@@ -425,6 +434,18 @@ while s.peek(S['NENN']) < 1: s.run_frames(10)
 s.mem.ram[S['INVUL']] = 0; s.mem.ram[E + 16] = P(s); s.mem.ram[E + 17] = Y(s); s.run_frames(100)
 check(s.peek(S['GSTATE']) == 3 and bytes(s.mem.ram[S['RECORD']:S['RECORD'] + 3]).hex() == '000000',
       "partie jouée en mode invincible : fin de partie sans record")
+
+# 20. cadence : 25 images/s fixes (même avec 1 ennemi), F : cadence libre (50 avec peu de sprites)
+s = boot(); s.mem.ram[S['NMAXLV']] = 1
+def ips(s, n=100):
+    i0 = s.peek(S['ITER']); s.run_frames(n); return ((s.peek(S['ITER']) - i0) % 256) * 50 / n
+s.run_frames(100)
+v1 = ips(s)
+s.key(ord('F')); s.run_frames(25)
+v2 = ips(s)
+s.key(ord('f')); s.run_frames(25)
+v3 = ips(s)
+check(v1 == 25 and v2 == 50 and v3 == 25, f"cadence fixe {v1} images/s ; F : libre {v2} ; F : fixe {v3}")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

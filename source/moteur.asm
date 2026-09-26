@@ -40,38 +40,39 @@ EA2     LEAU    ESIZE,U
 *  le plus bas d'entre eux : CLOCK >= 112 + Ymax + 16 + MARGE lignes.
 COUT    EQU     40              ; ~30 lignes mesurées (sprites compilés, son 1000 Hz) + marge
 KMAX    EQU     7
-PLAN    JSR     SORT            ; ORDER : lignes croissantes
-        LDA     #KMAX           ; K = min(KMAX, n) puis on descend jusqu'à ce que ça tienne
+* Calcul en un passage : le sprite j (rang dans ORDER, n sprites) a pour marge
+*  112 + Y(j) - m x COUT = B(j) - K x COUT, avec B(j) = 112 + Y(j) + (n-1-j) x COUT ;
+*  K tient si min B(j) >= K x COUT sur les K derniers ; on ajoute les sprites par le haut.
+PLAN    JSR     SORT            ; ORDER, YS : lignes croissantes
+        CLR     KK
+        LDD     #$7FFF
+        STD     MINB
+        LDX     #YS
+        LDB     NACT
+        ABX                     ; X -> après le dernier (le plus bas)
+UK1     LDA     KK              ; essai de K + 1 sprites
+        CMPA    #KMAX
+        BHS     UK5
         CMPA    NACT
-        BLS     UK1
-        LDA     NACT
-UK1     STA     KK
-UK2     TST     KK
-        BEQ     UK5
-        LDA     #1
-        STA     MM
-UK3     LDA     MM              ; sprite n-K+m-1
-        CMPA    KK
-        BHI     UK5             ; les K tiennent
-        ADDA    NACT
-        SUBA    KK
-        DECA
-        LDX     #ORDER
-        LDB     A,X
-        JSR     YOF
-        TFR     A,B
-        CLRA
-        ADDD    #112
-        STD     TMPW            ; 112 + Y
-        LDA     MM
+        BHS     UK5
         LDB     #COUT
-        MUL                     ; m x COUT
-        CMPD    TMPW
-        BHI     UK4             ; trop tard : un sprite de moins au 1er temps
-        INC     MM
-        BRA     UK3
-UK4     DEC     KK
-        BRA     UK2
+        MUL                     ; (n-1-j) x COUT, pour le sprite ajouté j = n-K-1
+        ADDD    #112
+        STD     TMPW
+        LDB     ,-X             ; sa ligne
+        CLRA
+        ADDD    TMPW            ; B(j)
+        CMPD    MINB
+        BHS     UK2
+        STD     MINB
+UK2     LDA     KK
+        INCA
+        LDB     #COUT
+        MUL                     ; (K+1) x COUT
+        CMPD    MINB
+        BHI     UK5             ; un sprite de plus ne tiendrait pas
+        INC     KK
+        BRA     UK1
 UK5     LDA     NACT
         SUBA    KK
         STA     SPLITK
@@ -79,12 +80,10 @@ UK5     LDA     NACT
         STD     T2L
         TST     SPLITK
         BEQ     UK9
-        LDX     #ORDER
+        LDX     #YS
         LDB     SPLITK
         DECB
-        LDB     B,X
-        JSR     YOF             ; Ymax du 2e temps
-        TFR     A,B
+        LDB     B,X             ; Ymax du 2e temps
         CLRA
         ADDD    #112+16         ; le faisceau a dépassé Ymax+15 à 112+Ymax+16 lignes
         ADDD    MARGE
@@ -176,51 +175,51 @@ ENTADR  LDA     #ESIZE
         TFR     D,X
         RTS
 
-* ORDER = entités triées par ligne croissante (tri par insertion, 10 au plus)
+* ORDER = entités triées par ligne croissante, YS = leurs lignes (tri par insertion sur les
+* deux tableaux à la fois : ni adresse d'entité ni multiplication dans les boucles)
 SORT    LDB     NENN
         INCB
         ADDB    NXTRA
         STB     NACT
-        LDX     #ORDER
+        LDX     #ENTS+1         ; ligne de l'entité 0
+        LDU     #ORDER
         CLRA
-SO1     STA     ,X+
+SO1     STA     ,U
+        LDB     ,X
+        STB     YOFS,U          ; YS[i]
+        LEAU    1,U
+        LEAX    ESIZE,X
         INCA
         CMPA    NACT
         BNE     SO1
-        LDA     #1
-        STA     SI
-SO2     LDA     SI
-        CMPA    NACT
-        BHS     SO9
-        LDX     #ORDER
-        LDB     A,X
-        STB     SKEY
-        JSR     YOF
+        LDB     NACT
+        DECB
+        BEQ     SO9
+        STB     SI              ; éléments 1..n-1 à insérer
+        LDU     #ORDER+1
+SO2     LDA     YOFS,U
         STA     SKY
-        LDA     SI
-        DECA
-        STA     SJ
-SO3     LDA     SJ
-        BMI     SO4
-        LDX     #ORDER
-        LDB     A,X
-        JSR     YOF
+        LDA     ,U
+        STA     SKEY
+        PSHS    U
+SO3     CMPU    #ORDER          ; décale vers le haut les lignes plus grandes
+        BEQ     SO4
+        LDA     YOFS-1,U
         CMPA    SKY
         BLS     SO4
-        LDX     #ORDER
-        LDA     SJ
-        LDB     A,X
-        INCA
-        STB     A,X
-        DEC     SJ
+        STA     YOFS,U
+        LDA     -1,U
+        STA     ,U
+        LEAU    -1,U
         BRA     SO3
-SO4     LDA     SJ
-        INCA
-        LDX     #ORDER
-        LDB     SKEY
-        STB     A,X
-        INC     SI
-        BRA     SO2
+SO4     LDA     SKY
+        STA     YOFS,U
+        LDA     SKEY
+        STA     ,U
+        PULS    U
+        LEAU    1,U
+        DEC     SI
+        BNE     SO2
 SO9     RTS
 * B = n° d'entité -> A = sa ligne
 YOF     PSHS    X

@@ -27,6 +27,7 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 | S | bruitages oui / non |
 | G | mode invincible (pour tester) : bord blanc, les ennemis ne font rien ; la partie ne compte pas pour le record |
 | N | en mode invincible : passer au niveau suivant |
+| F | cadence d'affichage : fixe à 25 images/s (par défaut) ou libre (50 images/s avec peu de sprites) |
 | Manette 1 | directions, bouton = saut |
 
 Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, puis on appuie sur ↑ ; Toto garde son élan en l'air. À la manette, on peut combiner les directions et le bouton.
@@ -36,7 +37,7 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, pui
 - **Saut** : 10 points à chaque décollage.
 - **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante, toujours dans le même ordre : il y a un parcours idéal à trouver. Quand tout est ramassé, on passe au niveau suivant.
 - **Bonus de chaîne** : en fin de niveau, 15 bombes allumées ramassées rapportent 10 000 points, 16 en rapportent 20 000, 17 en rapportent 30 000 et les 18, 50 000 (bord jaune).
-- **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 8, une pièce éclair apparaît (2 ou 3 fois par niveau). Elle **rebondit en diagonale** d'un bord à l'autre de l'aire de jeu, en passant devant les plateformes : il faut l'attraper. La jauge ne monte pas tant que la pièce est affichée ou que le gel dure ; elle continue d'un niveau à l'autre, et une pièce non prise revient au niveau suivant. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
+- **Pièce éclair** : une jauge gagne 1 par bombe éteinte et 2 par bombe allumée ; à 8, une pièce éclair apparaît (2 ou 3 fois par niveau). Elle **rebondit en diagonale** sur les bords de l'aire de jeu et sur les plateformes : il faut l'attraper. La jauge ne monte pas tant que la pièce est affichée ou que le gel dure. Chaque niveau repart de zéro : jauge vide, pas de pièce. Si Toto la prend, les ennemis se changent en **glaçons** pendant 5 s (bord bleu) : chacun rapporte 100, 200, 300, 500, 800, 1 200 puis 2 000 points et disparaît. Les glaçons clignotent pendant la dernière seconde.
 - **Un décor et une planche par niveau**, en boucle : Égypte (pyramides), Rome (deux corniches), Moscou (escalier), Paris (tour), Mont-Saint-Michel (terrasses). Chaque planche a ses plateformes, ses bombes, son ordre d'allumage et sa pièce éclair.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
   - **La pression monte** : toutes les 10 s passées sur un niveau, les ennemis arrivent un peu plus souvent et les marcheurs accélèrent (6 fois au plus, jusqu'à une apparition toutes les 1,8 s).
@@ -71,14 +72,13 @@ python3 niveaux.py          # l'écran titre et les 5 niveaux -> apercus/titre.p
 
 Mesures dans le simulateur, son compris :
 
-| Ennemis | Sprites entiers à l'écran | Images par seconde |
-|---|---|---|
-| 2–4 | 100 % | 50 |
-| 6–8 | 100 % | 25 |
-| 4 + pièce | 100 % | 25 |
-| 8 + pièce | 100 % | 17 |
+| Ennemis | Sprites entiers à l'écran | Images/s (cadence fixe) | Images/s (cadence libre, touche F) |
+|---|---|---|---|
+| 2–4 | 100 % | 25 | 50 |
+| 6–8 | 99,6–100 % | 25 | 25 |
+| 8 + pièce | 99,5 % | 24–25 | 24–25 |
 
-La vitesse du jeu ne dépend pas du nombre d'images par seconde : la logique avance au rythme de l'horloge (50 tops par seconde).
+Le TO9 affiche 50 images par seconde : seules 50, 25 ou 16,7 images/s donnent un mouvement régulier. Par défaut, le jeu reste à 25 images/s quel que soit le nombre de sprites, pour garder le même aspect tout au long de la partie. La vitesse du jeu, elle, ne dépend jamais de la cadence : la logique avance au rythme de l'horloge (50 tops par seconde).
 
 ## Comment ça marche
 

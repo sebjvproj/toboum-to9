@@ -66,6 +66,7 @@ RAGESP  EQU     8               ;   marcheurs un peu plus rapides
 RAGEMX  EQU     6               ;   6 fois au plus (au bout d'une minute)
 TRANSF  EQU     75              ; un robot au sol se transforme au bout de 1,5 s,
 TCLIGN  EQU     25              ; après avoir clignoté 0,5 s
+FRAMEL  EQU     312             ; une image = 20 000 cycles = 312 lignes de 64 cycles
 PWRSEUIL EQU    8               ; jauge : la pièce éclair apparaît à 8 (bombe éteinte 1, allumée 2)
 CVX     EQU     64              ; pièce : 0,25 paire par top (25 pixels/s)...
 CVY     EQU     208             ; ... et 0,8 ligne par top : elle rebondit en diagonale
@@ -99,8 +100,17 @@ START   LDB     #$14            ; curseur invisible
         JSR     CLKTEST
         JSR     NEWGAME
         JSR     PLAN            ; premier plan d'affichage
-* boucle : au retour de trame, mise à jour des sprites ; puis la logique, top par top
-LOOP    JSR     WAITVBL
+* boucle : au retour de trame, mise à jour des sprites ; puis la logique, top par top.
+* Cadence fixe de 25 images/s (sauf touche F) : si le tour a pris moins d'une image, on
+* laisse passer un retour de trame ; le jeu a ainsi le même aspect quel que soit le nombre
+* de sprites (le pire, 8 ennemis + la pièce, tient en 2 images).
+LOOP    TST     FPSLIB
+        BNE     LP0
+        JSR     CLOCK
+        CMPD    #FRAMEL-16      ; (marge : sans le compteur du 6846, l'horloge est à 16 lignes près)
+        BHS     LP0
+        JSR     WAITVBL
+LP0     JSR     WAITVBL
         JSR     CLKREF
         JSR     UPDATE
 UPDONE  JSR     READIN
@@ -149,8 +159,16 @@ RIG     JSR     GODTOGGLE
 RIN     CMPB    #'N             ; N (en mode invincible) : niveau suivant
         BEQ     RIN2
         CMPB    #'n
-        BNE     RI2C
+        BNE     RIF
 RIN2    JSR     GODSKIP
+        BRA     RI3
+RIF     CMPB    #'F             ; F : cadence libre (50/25/17 images/s) ou fixe (25)
+        BEQ     RIF2
+        CMPB    #'f
+        BNE     RI2C
+RIF2    LDA     FPSLIB
+        EORA    #1
+        STA     FPSLIB
         BRA     RI3
 RI2C    STB     LASTKEY
 RI3     LDB     LASTKEY
@@ -244,8 +262,6 @@ NEWGAME JSR     TITLE           ; écran titre, jusqu'à l'appui d'une touche
         LDA     #1
         STA     LEVELB
         STA     LEVELN
-        CLR     PWR             ; jauge et pièce à zéro
-        CLR     COINON
         CLR     GODUSED
         JMP     NEWLEVEL
 
@@ -308,18 +324,19 @@ NL4     STA     ESPEED
         CLR     RAGE
         CLR     NSPAWN
         CLR     NTRANS
-        CLR     CHAIN           ; chaîne de bombes allumées, gel ; la jauge continue
-        TST     COINON          ; pièce pas prise : elle revient tout de suite au niveau suivant
-        BEQ     NL5
-        LDA     #PWRSEUIL
-        STA     PWR
-NL5     CLR     POWER
+        CLR     CHAIN           ; nouveau niveau, tout repart de zéro : chaîne, jauge, pièce, gel
+        CLR     PWR
+        CLR     POWER
         CLR     COINON
-        JSR     COINMAYBE
         LDA     #50
         STA     INVUL
         LDA     #G_JEU
         STA     GSTATE
+        LDD     #$FFFF          ; panneau redessiné : tous les chiffres à réafficher
+        STD     STATSH
+        STD     STATSH+2
+        STD     STATSH+4
+        STD     STATSH+6
         LDA     #1
         STA     DIRTY
         LDX     #SFX_NIVEAU
@@ -1260,29 +1277,28 @@ RC9     RTS
 
 ****************************************************************
 * bombes
-BOMBCHK LDA     #NBOMB-1
-        STA     BIDX
-BC1     LDX     #BSTATE
-        LDA     BIDX
-        TST     A,X
+BOMBCHK LDX     BOMBPTR         ; Toto touche-t-il une bombe ? |paire| <= 2, |ligne| < 12
+        LDU     #BSTATE
+        LDB     #NBOMB
+BC1     TST     ,U+
         BEQ     BC3
-        LDX     BOMBPTR
-        ASLA
-        LEAX    A,X
-        LDA     ,X              ; |paire - Toto| <= 2
+        LDA     ,X
         SUBA    ENTS
-        BPL     BC1B
-        NEGA
-BC1B    CMPA    #2
+        ADDA    #2              ; -2..2 -> 0..4
+        CMPA    #4
         BHI     BC3
-        LDA     1,X             ; |ligne - Toto| < 12
+        LDA     1,X
         SUBA    ENTS+1
-        BPL     BC2
-        NEGA
-BC2     CMPA    #12
-        BLO     TAKEBOMB
-BC3     DEC     BIDX
-        BPL     BC1
+        ADDA    #11             ; -11..11 -> 0..22
+        CMPA    #22
+        BHI     BC3
+        NEGB                    ; n° de la bombe = NBOMB - B
+        ADDB    #NBOMB
+        STB     BIDX
+        JMP     TAKEBOMB
+BC3     LEAX    2,X
+        DECB
+        BNE     BC1
         RTS
 
 TAKEBOMB
@@ -1395,7 +1411,7 @@ CM1     BITA    #2
 CM2     INC     COINON
 CM9     RTS
 
-* la pièce rebondit sur les bords de l'aire de jeu (elle passe devant les plateformes)
+* la pièce rebondit sur les bords de l'aire de jeu et sur les plateformes
 COINTICK
         TST     COINON
         BEQ     CV9
@@ -1413,6 +1429,11 @@ COINTICK
         BLT     CV2
         CMPA    #PMAX
         BGT     CV2
+        PSHS    A
+        LDB     1,U
+        JSR     BLOCKED
+        PULS    A
+        BCS     CV2
         STA     ,U
         BRA     CV3
 CV2     NEG     4,U
@@ -1426,7 +1447,13 @@ CV3     LDA     13,U            ; vertical
         BLO     CV4
         CMPA    #YMAX
         BHI     CV4
-        STA     1,U
+        TFR     A,B
+        PSHS    B
+        LDA     ,U
+        JSR     BLOCKED
+        PULS    B
+        BCS     CV4
+        STB     1,U
         RTS
 CV4     NEG     5,U
 CV9     RTS
@@ -1706,23 +1733,33 @@ PTS200  FCB     $00,$02,$00
 ****************************************************************
 * panneau : score, record, vies, niveau (chiffres 3x5 blancs sur noir)
 SHOWSTATS
-        TST     DIRTY
-        BEQ     SS9
+        TST     DIRTY           ; seuls les chiffres qui ont changé sont redessinés
+        BEQ     SS9             ; (un chiffre coûte ~800 cycles : le panneau entier, 12 000)
         CLR     DIRTY
         LDX     #SCORE
+        LDY     #STATSH
         LDA     #65
         LDB     #25
-        JSR     SHOWBCD3
+        JSR     SHOWBCDD
         LDX     #RECORD
+        LDY     #STATSH+3
         LDA     #65
         LDB     #63
-        JSR     SHOWBCD3
+        JSR     SHOWBCDD
+        LDA     LIVES
+        CMPA    STATSH+6
+        BEQ     SS1
+        STA     STATSH+6
         LDA     #69
         STA     TXP
         LDA     #103
         STA     TXY
         LDA     LIVES
         JSR     DIGIT
+SS1     LDA     LEVELB
+        CMPA    STATSH+7
+        BEQ     SS9
+        STA     STATSH+7
         LDA     #67
         STA     TXP
         LDA     #143
@@ -1739,6 +1776,45 @@ SHOWSTATS
         ANDA    #$0F
         JMP     DIGIT
 SS9     RTS
+
+* 3 octets BCD en X -> 6 chiffres en (paire A, ligne B), seulement ceux qui diffèrent
+* de ce qui est affiché (Y : 3 octets, mis à jour)
+SHOWBCDD
+        STA     TXP
+        STB     TXY
+        LDB     #3
+SD1     PSHS    B
+        LDA     ,X
+        EORA    ,Y
+        STA     SDX             ; chiffres changés
+        BITA    #$F0
+        BEQ     SD2
+        LDA     ,X
+        LSRA
+        LSRA
+        LSRA
+        LSRA
+        PSHS    X,Y
+        JSR     DIGIT
+        PULS    X,Y
+SD2     INC     TXP
+        INC     TXP
+        LDA     SDX
+        BITA    #$0F
+        BEQ     SD3
+        LDA     ,X
+        ANDA    #$0F
+        PSHS    X,Y
+        JSR     DIGIT
+        PULS    X,Y
+SD3     INC     TXP
+        INC     TXP
+        LDA     ,X+
+        STA     ,Y+
+        PULS    B
+        DECB
+        BNE     SD1
+        RTS
 
 * 3 octets BCD en X -> 6 chiffres en (paire A, ligne B)
 SHOWBCD3
@@ -1951,6 +2027,8 @@ SFXSLIDE RMB    2
 SFXCNT  RMB     1
 ENTS    RMB     ESIZE*(NMAX+2)  ; Toto, ennemis, pièce éclair
 ORDER   RMB     NMAX+2
+YS      RMB     NMAX+2          ; lignes des entités de ORDER (même ordre)
+YOFS    EQU     YS-ORDER
 NACT    RMB     1
 SI      RMB     1
 SJ      RMB     1
@@ -1959,7 +2037,7 @@ SKY     RMB     1
 UPK     RMB     1
 SPLITK  RMB     1
 KK      RMB     1
-MM      RMB     1
+MINB    RMB     2               ; plan : plus petite marge B(j)
 T2L     RMB     2
 TIMEACC RMB     2
 CLK0    RMB     2
@@ -2000,8 +2078,11 @@ BLEFT   RMB     1
 LIT     RMB     1
 BSTATE  RMB     NBOMB
 CHAIN   RMB     1               ; bombes allumées ramassées dans ce niveau
+STATSH  RMB     8               ; panneau tel qu'affiché : score, record, vies, niveau
+SDX     RMB     1
 PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à PWRSEUIL)
 GOD     RMB     1               ; mode invincible
+FPSLIB  RMB     1               ; 1 : cadence libre (touche F)
 GODUSED RMB     1               ; ... utilisé pendant cette partie (pas de record)
 COINON  RMB     1               ; pièce éclair présente (entité NENN+1)
 NXTRA   EQU     COINON          ; (pour le moteur : entités en plus des ennemis)
