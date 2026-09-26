@@ -20,9 +20,9 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 | Touche | Effet |
 |---|---|
 | ← → | marcher ; en l'air, Toto garde son élan |
-| ↑ ou ESPACE | sauter ; **maintenue** : saut plus haut et chute lente |
+| ↑ ou ESPACE | sauter (aux 2/3 de l'écran) ; **maintenue en retombant** : chute lente |
 | ↑ de nouveau en l'air | **freiner** : Toto s'arrête un instant ; en tapotant, il plane |
-| ↓ | en l'air : chute rapide, et arrêt de l'élan |
+| ↓ | en l'air : saut court, chute rapide, et arrêt de l'élan |
 | S | bruitages oui / non |
 | Manette 1 | directions, bouton = saut |
 
@@ -78,7 +78,7 @@ Mesures dans le simulateur, son compris :
   - Puis il traite ceux du haut, une fois que le faisceau les a dépassés.
   - Pour savoir où en est le faisceau, il utilise une horloge au cycle près : l'interruption du timer 6846 plus la lecture de son compteur.
 - **Son** : des bruitages (une voix carrée qui glisse) sur le CNA 6 bits de l'extension jeux, calculés sous interruption du timer à 1 000 Hz. Cette même interruption sert d'horloge. Pas de musique pour l'instant.
-- **Saut** : la gravité est divisée par 2 si ↑ est tenu et doublée si ↓ l'est, ce qui donne des sauts de 60 à 170 lignes. Un nouvel appui en l'air remet la vitesse verticale à zéro.
+- **Saut** : 109 lignes, soit les 2/3 de l'aire de jeu. ↓ tenu double la gravité (saut court, chute rapide), ↑ tenu en descente la divise par 2 (chute lente). Un nouvel appui en l'air remet la vitesse verticale à zéro. Marche : 40 pixels/s.
 - **Logique** : le jeu avance à 50 tops par seconde, quel que soit le nombre d'images affichées.
 - **Décors** : celui du niveau 1 est dans le programme. Les 4 autres (7,5 Ko compressés chacun) sont dans `DECORS.DAT`, écrit en secteurs bruts à partir de la piste 21.
   - À chaque niveau, le jeu les lit secteur par secteur avec la routine `DKCO` du moniteur.

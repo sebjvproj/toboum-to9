@@ -5,7 +5,7 @@
 *  Toto à la casquette à hélice ramasse les 18 bombes du niveau (la bombe
 *  allumée rapporte double et allume la suivante) en évitant les ennemis.
 *  Flèches gauche/droite : marcher (en l'air, Toto garde son élan)
-*  Flèche haut ou ESPACE : sauter ; maintenue : saut long, chute lente ;
+*  Flèche haut ou ESPACE : sauter ; maintenue en descente : chute lente ;
 *  nouvel appui en l'air : freiner (on plane en tapotant)
 *  Flèche bas : en l'air, arrêter l'élan     S : bruitages oui/non
 *  Manette 1 : directions + bouton (saut)
@@ -54,9 +54,10 @@ T_ROBOT EQU     1
 T_CHAUV EQU     2
 T_BOULE EQU     3
 T_NUAGE EQU     4
-* physique de Toto (lignes x 256 par top de 1/50 s), façon arcade : saut de ~110 lignes
-* (60 % de l'aire de jeu) ; la gravité est divisée par 2 si haut est tenu (saut long,
-* chute lente), doublée si bas est tenu ; un nouvel appui en l'air freine (vitesse nulle)
+* physique de Toto (lignes x 256 par top de 1/50 s), façon arcade : saut de ~114 lignes
+* (les 2/3 de l'aire de jeu) ; bas tenu double la gravité (saut court, chute rapide) ;
+* haut tenu en descente la divise par 2 (chute lente) ; un nouvel appui en l'air freine
+VMARCHE EQU     102             ; marche : 102/256 = 0,4 paire par top = 40 pixels/s
 GRAV    EQU     $000E           ; 0,055 ligne/top²
 SAUT    EQU     $0378           ; 3,47 lignes/top au décollage
 CHUTEMX EQU     $0400           ; chute limitée à 4 lignes/top
@@ -411,10 +412,10 @@ TT2A    CLR     TVX
 TT2B    TST     IN_D
         BEQ     TT3
         CLR     TVX
-TT3     INC     HXC             ; un pas horizontal tous les 2 tops
-        LDA     HXC
-        BITA    #1
-        BEQ     TT5
+TT3     LDA     HXC             ; pas horizontal au rythme VMARCHE (fraction de paire par top)
+        ADDA    #VMARCHE
+        STA     HXC
+        BCC     TT5             ; pas de retenue : pas de pas ce top-ci
         LDA     ,U
         ADDA    TVX
         CMPA    #PMIN
@@ -453,19 +454,20 @@ TT6B    LDD     #0              ; en l'air : frein
         STD     TVY
 TT7     TST     ONGND
         LBNE    TT20
-* en l'air : gravité selon la touche (haut : /2, saut long et chute lente ; bas : x2)
+* en l'air : gravité ; bas : x2 (saut court, chute rapide) ; haut tenu en DESCENTE : /2
+* (chute lente, image « hélice ») ; en montée, haut ne change rien : saut aux 2/3 de l'écran
         CLR     GLIDE
         LDX     #GRAV
-        TST     IN_U
+        TST     IN_D
         BEQ     TT7B
-        LDX     #GRAV/2
-        LDD     TVY             ; en descente, haut maintenu : image « hélice »
-        BMI     TT8
-        INC     GLIDE
-        BRA     TT8
-TT7B    TST     IN_D
-        BEQ     TT8
         LDX     #GRAV*2
+        BRA     TT8
+TT7B    TST     IN_U
+        BEQ     TT8
+        LDD     TVY
+        BMI     TT8             ; en montée : gravité normale
+        LDX     #GRAV/2
+        INC     GLIDE
 TT8     STX     TMPW
         LDD     TVY
         ADDD    TMPW

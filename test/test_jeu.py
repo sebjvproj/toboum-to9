@@ -33,8 +33,8 @@ check(diff > 20, f"les bombes sont dessinées ({diff} pixels de bombe à la 6e)"
 check(s.peek(S['NENN']) == 0, "pas encore d'ennemi")
 
 # 2. marche à droite
-p0 = P(s); s.hold(0x09, 40); s.run_frames(40)
-check(P(s) > p0 and s.peek(S['FACE']) == 0, f"marche à droite ({p0} -> {P(s)})")
+p0 = P(s); s.hold(0x09, 50); s.run_frames(50)
+check(18 <= P(s) - p0 <= 22 and s.peek(S['FACE']) == 0, f"marche à droite : {P(s) - p0} paires en 1 s, soit {2 * (P(s) - p0)} pixels/s")
 s.run_frames(20)
 
 # 3. saut : Toto monte puis redescend et se pose
@@ -61,9 +61,9 @@ h_n, d_n, t = sommet(lambda t: t.key(0x0B))
 h_h, d_h, _ = sommet(lambda t: t.hold(0x0B, 400))
 def bas(t): t.key(0x0B); t.run_frames(4); t.hold(0x0A, 300)
 h_b, d_b, _ = sommet(bas)
-check(100 <= h_n <= 125 and h_h >= 160 and 50 <= h_b <= 75,
-      f"hauteur du saut : neutre {h_n}, haut tenu {h_h} (plafond), bas tenu {h_b} lignes")
-check(d_h > d_n > d_b, f"temps en l'air : haut tenu {d_h} > neutre {d_n} > bas tenu {d_b} images")
+check(100 <= h_n <= 125 and abs(h_h - h_n) <= 3 and 50 <= h_b <= 75,
+      f"hauteur du saut : neutre {h_n} (2/3 de l'aire de jeu), haut tenu {h_h} (pareil), bas tenu {h_b} lignes")
+check(d_h > d_n > d_b, f"temps en l'air : haut tenu {d_h} (chute lente) > neutre {d_n} > bas tenu {d_b} images")
 check(score(t) == '000010', f"+10 points par décollage (score {score(t)})")
 s2 = boot(); s2.key(0x0B); s2.run_frames(20); s2.key(0x0B); s2.run_frames(2)
 v = s2.mem.read_word(S['TVY']); v = v - 65536 if v > 32767 else v
