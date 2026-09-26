@@ -7,9 +7,12 @@ Un jeu de plates-formes inspiré de **Bomb Jack** (Tehkan, 1984). Toto porte une
 Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropic) : moteur 6809, sprites, outils, simulateur et tests. Les décors ont été générés par un modèle d'image à partir de descriptions en texte ([graphismes/PROMPTS.md](graphismes/PROMPTS.md)), puis convertis pour le TO9.
 *Entirely vibe-coded with Claude.*
 
+![TOboum : la boîte, le manuel et la disquette](apercus/boite.jpg)
+*Une boîte imaginaire, à la manière des jeux Thomson des années 80 (image générée par IA).*
+
 ![En jeu](apercus/toboum.gif)
 
-> TOboum est un projet amateur, sans lien avec Koei Tecmo. Bomb Jack est une marque de Koei Tecmo. Le jeu reprend l'idée et les règles générales de Bomb Jack, mais aucune de ses données : graphismes, sons, niveaux et code ont été créés pour ce projet.
+> TOboum est un projet amateur, sans lien avec Koei Tecmo ni avec Thomson. Bomb Jack est une marque de Koei Tecmo. Le jeu reprend l'idée et les règles générales de Bomb Jack, mais aucune de ses données : graphismes, sons, niveaux et code ont été créés pour ce projet.
 
 > Version en cours de développement.
 
