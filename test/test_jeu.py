@@ -41,7 +41,7 @@ s.run_frames(20)
 y0 = Y(s); s.hold(0x0B, 10); s.run_frames(12)
 y1 = Y(s)
 check(y1 < y0 - 20 and s.peek(S['ONGND']) == 0, f"saut : Toto monte ({y0} -> {y1})")
-s.run_frames(120)
+s.run_frames(180)
 check(s.peek(S['ONGND']) == 1 and Y(s) <= y0, f"il retombe et se pose (ligne {Y(s)})")
 
 # 3b. saut en biais au clavier : droite maintenue, puis haut (le clavier ne voit que haut)
@@ -49,10 +49,25 @@ s3 = boot(); s3.hold(0x09, 60); s3.run_frames(20)
 p0 = P(s3); s3.hold(0x0B, 8); s3.run_frames(30)
 check(s3.peek(S['ONGND']) == 0 and P(s3) > p0 + 3 and s3.peek(S['TVX']) == 1, f"saut en biais : droite puis haut, Toto part à droite ({p0} -> {P(s3)})")
 
-# 4. vol plané : touche haut maintenue en retombant = descente lente
-s2 = boot(); s2.hold(0x0B, 200); s2.run_frames(60)
-v = s2.mem.read_word(S['TVY'])
-check(s2.peek(S['GLIDE']) == 1 and v == 0x80, f"vol plané : vitesse de chute limitée ({v:#x})")
+# 4. saut façon arcade : hauteur selon la touche, frein par nouvel appui, +10 points
+def sommet(action):
+    t = boot(); t.mem.ram[S['INVUL']] = 250; y0 = Y(t); ys = []
+    action(t)
+    for f in range(300):
+        t.run_frames(1); ys.append(Y(t))
+        if f > 10 and t.peek(S['ONGND']): break
+    return y0 - min(ys), len(ys), t
+h_n, d_n, t = sommet(lambda t: t.key(0x0B))
+h_h, d_h, _ = sommet(lambda t: t.hold(0x0B, 400))
+def bas(t): t.key(0x0B); t.run_frames(4); t.hold(0x0A, 300)
+h_b, d_b, _ = sommet(bas)
+check(100 <= h_n <= 125 and h_h >= 160 and 50 <= h_b <= 75,
+      f"hauteur du saut : neutre {h_n}, haut tenu {h_h} (plafond), bas tenu {h_b} lignes")
+check(d_h > d_n > d_b, f"temps en l'air : haut tenu {d_h} > neutre {d_n} > bas tenu {d_b} images")
+check(score(t) == '000010', f"+10 points par décollage (score {score(t)})")
+s2 = boot(); s2.key(0x0B); s2.run_frames(20); s2.key(0x0B); s2.run_frames(2)
+v = s2.mem.read_word(S['TVY']); v = v - 65536 if v > 32767 else v
+check(0 <= v < 0x20 and s2.peek(S['ONGND']) == 0, f"frein : un nouvel appui en l'air annule la vitesse verticale ({v / 256:+.2f})")
 
 # 5. bombe allumée (n° 0) ramassée : 200 points, la suivante s'allume, fond propre
 s = boot()

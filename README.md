@@ -20,15 +20,17 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 | Touche | Effet |
 |---|---|
 | ← → | marcher ; en l'air, Toto garde son élan |
-| ↑ ou ESPACE | sauter ; maintenue en retombant : **planer** |
-| ↓ | en l'air, arrêter l'élan |
-| S | son oui / non |
+| ↑ ou ESPACE | sauter ; **maintenue** : saut plus haut et chute lente |
+| ↑ de nouveau en l'air | **freiner** : Toto s'arrête un instant ; en tapotant, il plane |
+| ↓ | en l'air : chute rapide, et arrêt de l'élan |
+| S | bruitages oui / non |
 | Manette 1 | directions, bouton = saut |
 
-Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, on saute, puis on plane. À la manette, on peut combiner les directions et le bouton.
+Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, puis on appuie sur ↑ ; Toto garde son élan en l'air. À la manette, on peut combiner les directions et le bouton.
 
 ### Règles
 
+- **Saut** : 10 points à chaque décollage.
 - **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante. Quand tout est ramassé, on passe au niveau suivant.
 - **Un décor par niveau**, en boucle : Égypte, Rome, Moscou, Paris, Mont-Saint-Michel.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
@@ -75,7 +77,8 @@ Mesures dans le simulateur, son compris :
   - Au retour de trame, le moteur traite d'abord les sprites du bas, avant que le faisceau y arrive.
   - Puis il traite ceux du haut, une fois que le faisceau les a dépassés.
   - Pour savoir où en est le faisceau, il utilise une horloge au cycle près : l'interruption du timer 6846 plus la lecture de son compteur.
-- **Son** : 2 voix carrées et des bruitages sur le CNA 6 bits de l'extension jeux, calculés sous interruption du timer à 1 000 Hz. Cette même interruption sert d'horloge.
+- **Son** : des bruitages (une voix carrée qui glisse) sur le CNA 6 bits de l'extension jeux, calculés sous interruption du timer à 1 000 Hz. Cette même interruption sert d'horloge. Pas de musique pour l'instant.
+- **Saut** : la gravité est divisée par 2 si ↑ est tenu et doublée si ↓ l'est, ce qui donne des sauts de 60 à 170 lignes. Un nouvel appui en l'air remet la vitesse verticale à zéro.
 - **Logique** : le jeu avance à 50 tops par seconde, quel que soit le nombre d'images affichées.
 - **Décors** : celui du niveau 1 est dans le programme. Les 4 autres (7,5 Ko compressés chacun) sont dans `DECORS.DAT`, écrit en secteurs bruts à partir de la piste 21.
   - À chaque niveau, le jeu les lit secteur par secteur avec la routine `DKCO` du moniteur.

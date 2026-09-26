@@ -5,8 +5,9 @@
 *  Toto à la casquette à hélice ramasse les 18 bombes du niveau (la bombe
 *  allumée rapporte double et allume la suivante) en évitant les ennemis.
 *  Flèches gauche/droite : marcher (en l'air, Toto garde son élan)
-*  Flèche haut ou ESPACE : sauter ; maintenue en retombant : planer
-*  Flèche bas : en l'air, arrêter l'élan     S : son oui/non
+*  Flèche haut ou ESPACE : sauter ; maintenue : saut long, chute lente ;
+*  nouvel appui en l'air : freiner (on plane en tapotant)
+*  Flèche bas : en l'air, arrêter l'élan     S : bruitages oui/non
 *  Manette 1 : directions + bouton (saut)
 *
 *  Mémoire : programme et données $A000-$DFFF ; copie de l'aire de jeu $6400-$8DAF ;
@@ -53,11 +54,12 @@ T_ROBOT EQU     1
 T_CHAUV EQU     2
 T_BOULE EQU     3
 T_NUAGE EQU     4
-* physique de Toto (lignes x 256 par top de 1/50 s)
-GRAV    EQU     $0020
-SAUT    EQU     $0500
-PLANE   EQU     $0080
-CHUTEMX EQU     $0300
+* physique de Toto (lignes x 256 par top de 1/50 s), façon arcade : saut de ~110 lignes
+* (60 % de l'aire de jeu) ; la gravité est divisée par 2 si haut est tenu (saut long,
+* chute lente), doublée si bas est tenu ; un nouvel appui en l'air freine (vitesse nulle)
+GRAV    EQU     $000E           ; 0,055 ligne/top²
+SAUT    EQU     $0378           ; 3,47 lignes/top au décollage
+CHUTEMX EQU     $0400           ; chute limitée à 4 lignes/top
 * états de la partie
 G_JEU   EQU     0
 G_MORT  EQU     1
@@ -427,36 +429,49 @@ TT3     INC     HXC             ; un pas horizontal tous les 2 tops
         STA     ,U
         BRA     TT5
 TT4     CLR     TVX
-* saut
+* saut (à chaque NOUVEL appui) : au sol il décolle, en l'air il freine (vitesse verticale nulle)
 TT5     TST     IN_U
         BNE     TT6
         CLR     JLATCH
         BRA     TT7
-TT6     TST     ONGND
-        BEQ     TT7
-        TST     JLATCH
+TT6     TST     JLATCH          ; touche déjà tenue : pas un nouvel appui
         BNE     TT7
-        LDD     #-SAUT
+        INC     JLATCH
+        TST     ONGND
+        BEQ     TT6B
+        LDD     #-SAUT          ; décollage
         STD     TVY
         CLR     ONGND
-        INC     JLATCH
+        LDX     #PTS10          ; +10 points par décollage
+        JSR     ADDSCORE
+        LDA     #1
+        STA     DIRTY
         LDX     #SFX_SAUT
         JSR     PLAYSFX
+        BRA     TT7
+TT6B    LDD     #0              ; en l'air : frein
+        STD     TVY
 TT7     TST     ONGND
         LBNE    TT20
-* en l'air : gravité, vol plané, déplacement vertical
+* en l'air : gravité selon la touche (haut : /2, saut long et chute lente ; bas : x2)
         CLR     GLIDE
-        LDD     TVY
-        ADDD    #GRAV
-        CMPD    #CHUTEMX
-        BLE     TT8
-        LDD     #CHUTEMX
-TT8     TST     IN_U
-        BEQ     TT9
-        CMPD    #PLANE
-        BLE     TT9
-        LDD     #PLANE
+        LDX     #GRAV
+        TST     IN_U
+        BEQ     TT7B
+        LDX     #GRAV/2
+        LDD     TVY             ; en descente, haut maintenu : image « hélice »
+        BMI     TT8
         INC     GLIDE
+        BRA     TT8
+TT7B    TST     IN_D
+        BEQ     TT8
+        LDX     #GRAV*2
+TT8     STX     TMPW
+        LDD     TVY
+        ADDD    TMPW
+        CMPD    #CHUTEMX
+        BLE     TT9
+        LDD     #CHUTEMX
 TT9     STD     TVY
         LDA     1,U             ; ancienne ligne
         STA     OLDY
@@ -1124,6 +1139,7 @@ ADDSCORE
         DAA
         STA     SCORE
         RTS
+PTS10   FCB     $00,$00,$10
 PTS100  FCB     $00,$01,$00
 PTS200  FCB     $00,$02,$00
 
@@ -1244,7 +1260,7 @@ DGLUT   FCB     $00,$08,$80,$88 ; (pixel 0, pixel 1) : fond noir / blanc
 DGLUT2  FCB     $00,$80
 
 ****************************************************************
-* son : IRQ timer du 6846 à 1000 Hz : arpège 2 voix + bruitages (voix 2) ; horloge
+* son : IRQ timer du 6846 à 1000 Hz : bruitages (une voix carrée) ; horloge
 SNDON   LDA     DACCR           ; port B du PIA jeux : bits 0-5 en sortie (CNA)
         ANDA    #$FB
         STA     DACCR
@@ -1274,11 +1290,10 @@ SNDRATE PSHS    CC
         STA     DIVREL
         STA     SNDDIV
         CLRA
-        TST     SNDFLAG
+        TST     SNDFLAG         ; S : bruitages oui / non
         BEQ     SR1
-        LDA     #14
-SR1     STA     VOL1
-        STA     VOL2
+        LDA     #24
+SR1     STA     VOL2
         PULS    CC,PC
 SNDTOGGLE
         LDA     SNDFLAG
@@ -1308,65 +1323,35 @@ SFX_NIVEAU  FDB 10000,800
             FCB 25
 
 SNDIRQ  PSHS    D
-        LDD     TIMEACC
+        LDD     TIMEACC         ; horloge : +1000 cycles par IRQ
         ADDD    #LATCH+1
         STD     TIMEACC
-        LDD     PH1
-        ADDD    INC1
-        STD     PH1
-        LDB     VOL1
-        TSTA
-        BMI     SQ1
-        CLRB
-SQ1     STB     MIX
-        LDD     PH2
+        LDD     PH2             ; une voix carrée : les bruitages (pas de musique)
         ADDD    INC2
         STD     PH2
         LDB     VOL2
         TSTA
         BMI     SQ2
         CLRB
-SQ2     ADDB    MIX
-        STB     DAC
+SQ2     STB     DAC
         DEC     SNDDIV
         BNE     SQ9
         LDA     DIVREL          ; top à 50 Hz
         STA     SNDDIV
         INC     TICK
-        TST     SFXCNT          ; bruitage en cours : voix 2
-        BEQ     SQ3
+        TST     SFXCNT          ; bruitage en cours : sa note glisse, puis silence
+        BEQ     SQ9
         DEC     SFXCNT
         LDD     SFXINC
         STD     INC2
         ADDD    SFXSLIDE
         STD     SFXINC
         TST     SFXCNT
-        BNE     SQ3
+        BNE     SQ9
         LDD     #0
         STD     INC2
-SQ3     DEC     NOTECNT         ; arpège : une note toutes les 8 images
-        BPL     SQ9
-        LDA     #7
-        STA     NOTECNT
-        PSHS    X
-        LDB     NOTEIDX
-        INCB
-        ANDB    #7
-        STB     NOTEIDX
-        ASLB
-        LDX     #ARPEGE
-        ABX
-        LDD     ,X
-        STD     INC1
-        TST     SFXCNT
-        BNE     SQ4
-        LDD     16,X
-        STD     INC2
-SQ4     PULS    X
 SQ9     PULS    D
         JMP     IRQEXIT
-ARPEGE  FDB     17146,21602,25690,21602,17146,12845,14418,16184
-        FDB     4287,4287,5401,5401,4287,4287,4811,4811
 
         INCLUDE "moteur.asm"
         INCLUDE "toboum_data.asm"
@@ -1392,15 +1377,9 @@ ULDIST  RMB     2
 SNDFLAG RMB     1
 SNDDIV  RMB     1
 DIVREL  RMB     1
-NOTECNT RMB     1
-NOTEIDX RMB     1
-PH1     RMB     2
-INC1    RMB     2
-VOL1    RMB     1
 PH2     RMB     2
 INC2    RMB     2
 VOL2    RMB     1
-MIX     RMB     1
 SFXINC  RMB     2
 SFXSLIDE RMB    2
 SFXCNT  RMB     1
