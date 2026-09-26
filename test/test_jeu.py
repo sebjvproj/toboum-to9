@@ -18,8 +18,8 @@ def pixels(s):
     A, B = s.mem.vram
     return [[v for xb in range(40) for v in (A[y*40+xb] >> 4, A[y*40+xb] & 15, B[y*40+xb] >> 4, B[y*40+xb] & 15)]
             for y in range(200)]
-def boot():
-    s = TO9('TOBOUM.BIN'); s.run_frames(60); return s
+def boot(fd=True):
+    s = TO9('TOBOUM.BIN', fd='TOBOUM.fd' if fd else None); s.run_frames(60); return s
 def poke(s, lab, v, off=0): s.mem.ram[S[lab] + off] = v & 0xFF
 
 # 1. départ
@@ -96,7 +96,7 @@ bx, by = NIV['bombes'][17]
 poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
 s.run_frames(3)
 check(s.peek(S['GSTATE']) == 2, "dernière bombe : niveau terminé")
-s.run_frames(100)
+s.run_frames(200)                                  # (pause, lecture du décor sur la disquette)
 check(s.peek(S['LEVELB']) == 2 and s.peek(S['BLEFT']) == 18 and s.peek(S['NMAXLV']) == 5, f"niveau 2 : 18 bombes, 5 ennemis au plus")
 
 # 10. fin de partie : record, puis nouvelle partie
@@ -142,6 +142,36 @@ for i in range(600):
     if random.random() < 0.3: s.hold(random.choice([0x08, 0x09, 0x0B, 0x0B, 0x20]), random.randint(3, 40))
     s.run_frames(5)
 check(not viol and s.peek(S['NENN']) == 8, f"1 min avec 8 ennemis : aucun sprite dans une plateforme ({vus[0]} images contrôlées, {len(viol)} fautes {viol[:3]})")
+
+# 13. un décor par niveau : lu sur la disquette, palette comprise ; retour au 1er après le 5e
+def finir_niveau(s):
+    for i in range(18): s.mem.ram[S['BSTATE'] + i] = 0
+    s.mem.ram[S['BSTATE'] + 17] = 1; poke(s, 'BLEFT', 1)
+    bx, by = NIV['bombes'][17]
+    poke(s, 'ENTS', bx // 2); poke(s, 'ENTS', by, 1); poke(s, 'ONGND', 0)
+    s.run_frames(3); s.run_frames(200)
+def ecart_decor(s, nom):
+    """pixels de l'aire de jeu différents du décor attendu (hors bombes et Toto)"""
+    px = pixels(s); ref = NIV['decors'][nom]
+    hors = {(y, x) for bx, by in NIV['bombes'] for y in range(by, by + 16) for x in range(bx, bx + 8)}
+    for k in range(s.peek(S['NENN']) + 1):            # Toto et ennemis, là où ils sont dessinés
+        b = E + 16 * k; p, y = s.peek(b + 2), s.peek(b + 3)
+        if p != 0xFF: hors |= {(yy, xx) for yy in range(y, y + 16) for xx in range(2 * p, 2 * p + 8)}
+    return sum(px[y][x] != ref[y][x] for y in range(8, 192) for x in range(8, 124) if (y, x) not in hors)
+ordre = NIV['ordre']
+s = boot()
+check(ecart_decor(s, ordre[0]) == 0 and s.dk_reads == [], f"niveau 1 : {ordre[0]}, sans lecture de disquette")
+finir_niveau(s)
+lu = s.dk_reads
+check(len(lu) == 30 and lu[0][:2] == (21, 1) and lu[-1][:2] == (22, 14), f"niveau 2 : {len(lu)} secteurs lus, pistes {lu[0][:2]} -> {lu[-1][:2]}")
+check(ecart_decor(s, ordre[1]) == 0, f"niveau 2 : décor {ordre[1]} affiché ({ecart_decor(s, ordre[1])} pixels différents)")
+pal_attendue = [tuple(c) for c in json.load(open(f'../graphismes/decors/{ordre[1]}_palette.json'))['niveaux_to9']]
+lv = [round(255 * (v / 15) ** (1 / 2.8)) for v in range(16)]
+check(s.palette_rgb()[:7] == [tuple(lv[c] for c in t) for t in pal_attendue[:7]], "niveau 2 : palette du décor")
+for n in range(3, 7): finir_niveau(s)
+check(s.peek(S['LEVELB']) == 6 and ecart_decor(s, ordre[0]) == 0, f"niveau 6 : retour à {ordre[0]}")
+s = boot(fd=False); finir_niveau(s)
+check(s.peek(S['LEVELB']) == 2 and ecart_decor(s, ordre[0]) == 0, "sans disquette : le niveau 2 garde le 1er décor, sans planter")
 
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

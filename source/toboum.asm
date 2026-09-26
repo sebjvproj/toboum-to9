@@ -30,6 +30,13 @@ PALIDX  EQU     $E7DB
 VMODE   EQU     $E7DC
 BORDER  EQU     $E7DD
 GATE7   EQU     $E7E7
+* lecture de secteurs de disquette par le moniteur
+DKCO    EQU     $E82A
+DKOPC   EQU     $6048           ; opération (2 = lire un secteur)
+DKDRV   EQU     $6049           ; lecteur
+DKTRK   EQU     $604A           ; piste (16 bits)
+DKSEC   EQU     $604C           ; secteur (1 à 16)
+DKBUF   EQU     $604F           ; adresse de destination (256 octets)
 
 BUFA    EQU     $6400           ; copie de l'aire de jeu (184 lignes x 29 octets par banque)
 BUFB    EQU     BUFA+184*29
@@ -66,6 +73,8 @@ START   LDB     #$14            ; curseur invisible
         ORCC    #$50
         LDS     #$9FF0
         JSR     INITVARS
+        LDX     #PALETTE        ; décor du niveau 1 : dans le programme
+        STX     PALPTR
         LDA     #$7B
         STA     VMODE
         CLR     BORDER
@@ -184,8 +193,12 @@ NEWLEVEL
         JSR     TOTORESET       ; d'abord : Toto et ennemis « jamais dessinés »
         CLR     NENN
         CLR     BORDER
+        LDX     #PALNOIR        ; écran noir pendant la préparation
+        STX     PALPTR
+        JSR     SETPAL
         PSHS    CC
         ORCC    #$50
+        JSR     CHOOSEDECOR     ; décor du niveau (lu sur la disquette si besoin)
         JSR     SHOWDECOR
         JSR     SAVEBUF
         CLRA                    ; fond propre sous chaque bombe
@@ -207,6 +220,9 @@ NL2     STA     BIDX
         CMPA    #NBOMB
         BNE     NL2
         PULS    CC
+        LDX     NEWPAL          ; le décor est prêt : ses couleurs
+        STX     PALPTR
+        JSR     SETPAL
         LDA     #NBOMB
         STA     BLEFT
         LDA     LEVELN          ; ennemis au plus : niveau + 3 (8 au maximum)
@@ -230,6 +246,94 @@ NL4     STA     SPDMASK
         STA     DIRTY
         LDX     #SFX_NIVEAU
         JMP     PLAYSFX
+
+* décor du niveau : n° (niveau - 1) modulo NDECOR ; le 0 est dans le programme, les autres
+* sont lus sur la disquette (DECORS.DAT, secteurs bruts) dans la copie de l'aire de jeu, libre
+* à ce moment-là (SAVEBUF la réécrit ensuite). En cas d'erreur de lecture : décor 0.
+CHOOSEDECOR
+        LDA     LEVELN
+        DECA
+CD1     CMPA    #NDECOR
+        BLO     CD2
+        SUBA    #NDECOR
+        BRA     CD1
+CD2     STA     DECN
+        BEQ     CD8
+        JSR     LOADDECOR
+        BCS     CD8
+        LDX     #BUFA           ; palette (copiée à part : SAVEBUF réécrira cette zone),
+        LDU     #PALRAM         ; puis position de la banque B, puis banque A
+        LDB     #32
+CD3     LDA     ,X+
+        STA     ,U+
+        DECB
+        BNE     CD3
+        LDX     #PALRAM
+        STX     NEWPAL
+        LDX     #BUFA+34
+        STX     LZPA
+        LDD     BUFA+32
+        ADDD    #BUFA
+        STD     LZPB
+        RTS
+CD8     LDX     #PALETTE
+        STX     NEWPAL
+        LDX     #LZ_DECOR_A
+        STX     LZPA
+        LDX     #LZ_DECOR_B
+        STX     LZPB
+        RTS
+
+* lit le décor DECN (1..) : DECTAB donne 1er secteur et nombre de secteurs depuis la piste
+* DATTRK secteur 1 ; C = 1 si erreur
+LOADDECOR
+        LDX     #DECTAB
+        LDA     DECN
+        DECA
+        ASLA
+        LEAX    A,X
+        LDB     1,X
+        STB     CNT             ; nombre de secteurs
+        LDB     ,X              ; 1er secteur (linéaire)
+        CLRA
+        TFR     B,A             ; piste = DATTRK + secteur / 16, secteur = reste + 1
+        LSRA
+        LSRA
+        LSRA
+        LSRA
+        ADDA    #DATTRK
+        STA     LDTRK
+        ANDB    #15
+        INCB
+        STB     LDSEC
+        LDX     #BUFA
+LD1     LDA     #2
+        STA     DKOPC
+        CLR     DKDRV
+        CLR     DKTRK
+        LDA     LDTRK
+        STA     DKTRK+1
+        LDA     LDSEC
+        STA     DKSEC
+        STX     DKBUF
+        PSHS    X
+        JSR     DKCO
+        PULS    X
+        BCS     LD9
+        LEAX    256,X
+        INC     LDSEC
+        LDA     LDSEC
+        CMPA    #17
+        BNE     LD2
+        LDA     #1
+        STA     LDSEC
+        INC     LDTRK
+LD2     DEC     CNT
+        BNE     LD1
+        ANDCC   #$FE
+LD9     RTS
+PALNOIR FCB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        FCB     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 * Toto au point de départ, plus d'ennemis à l'écran (tous marqués « jamais dessinés »)
 TOTORESET
@@ -1346,6 +1450,14 @@ BIDX    RMB     1
 BLEFT   RMB     1
 LIT     RMB     1
 BSTATE  RMB     NBOMB
+PALPTR  RMB     2               ; palette courante
+NEWPAL  RMB     2               ; palette du décor en préparation
+PALRAM  RMB     32              ; palette d'un décor lu sur la disquette
+LZPA    RMB     2               ; décor compressé : banque A
+LZPB    RMB     2               ; banque B
+DECN    RMB     1
+LDTRK   RMB     1
+LDSEC   RMB     1
 TXP     RMB     1
 TXY     RMB     1
 CYB     RMB     1

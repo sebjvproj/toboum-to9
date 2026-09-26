@@ -2,8 +2,8 @@
 *  Moteur de sprites TO9 (repris de la démo, validé dans DCMOTO) :
 *  mise à jour sans scintillement calée sur le faisceau, sprites compilés,
 *  effacement par copie du décor, horloge au cycle près (timer 6846).
-*  Le programme qui l'inclut définit : ESIZE, NMAX, BUFA/BUFB, PALETTE, LZ_DECOR_A/B,
-*  ER16, BUFROW et les variables (voir toboum.asm).
+*  Le programme qui l'inclut définit : ESIZE, NMAX, BUFA/BUFB, ER16, BUFROW et les variables,
+*  dont PALPTR (palette) et LZPA/LZPB (décor compressé) (voir toboum.asm).
 ****************************************************************
 ERASEALL
         LDU     #ENTS
@@ -332,13 +332,13 @@ SHOWDECOR
         LDA     PRC
         ORA     #1
         STA     PRC
-        LDX     #LZ_DECOR_A
+        LDX     LZPA            ; données compressées de la banque A
         LDU     #$4000
         JSR     UNLZ
         LDA     PRC
         ANDA    #$FE
         STA     PRC
-        LDX     #LZ_DECOR_B
+        LDX     LZPB            ; et de la banque B
         LDU     #$4000
         JMP     UNLZ
 UNLZ    CMPU    #$5F40
@@ -397,7 +397,7 @@ SETPAL  CLR     PALIDX
 SP1     PSHS    B
         EORB    #8              ; le TO9 range l'entrée k dans la couleur k xor 8
         ASLB
-        LDX     #PALETTE
+        LDX     PALPTR          ; palette courante (16 x 2 octets)
         ABX
         LDA     ,X
         STA     PALDAT

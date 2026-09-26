@@ -30,6 +30,7 @@ Le clavier du TO9 ne transmet qu'une touche à la fois : on part en courant, on 
 ### Règles
 
 - **Bombes** : une bombe éteinte rapporte 100 points ; la bombe **allumée** (rouge) en rapporte 200 et allume la suivante. Quand tout est ramassé, on passe au niveau suivant.
+- **Un décor par niveau**, en boucle : Égypte, Rome, Moscou, Paris, Mont-Saint-Michel.
 - **Ennemis** : un toutes les 3 s, jusqu'à « niveau + 3 » (8 au plus). Ils sont plus rapides à partir du niveau 3.
   - le **robot** tombe, puis marche sur les plateformes ;
   - la **chauve-souris** poursuit Toto ;
@@ -43,8 +44,8 @@ Il faut `python3`, [Pillow](https://pypi.org/project/pillow/) et `lwasm` ([lwtoo
 
 ```sh
 cd source
-sh build.sh            # -> TOBOUM.BIN et TOBOUM.fd (décor : egypte)
-sh build.sh paris      # autre décor : egypte, rome, moscou, paris, mont_st_michel
+sh build.sh            # -> TOBOUM.BIN, DECORS.DAT et TOBOUM.fd
+sh build.sh paris      # autre décor pour le niveau 1 (egypte, rome, moscou, paris, mont_st_michel)
 ```
 
 ### Tests
@@ -76,6 +77,10 @@ Mesures dans le simulateur, son compris :
   - Pour savoir où en est le faisceau, il utilise une horloge au cycle près : l'interruption du timer 6846 plus la lecture de son compteur.
 - **Son** : 2 voix carrées et des bruitages sur le CNA 6 bits de l'extension jeux, calculés sous interruption du timer à 1 000 Hz. Cette même interruption sert d'horloge.
 - **Logique** : le jeu avance à 50 tops par seconde, quel que soit le nombre d'images affichées.
+- **Décors** : celui du niveau 1 est dans le programme. Les 4 autres (7,5 Ko compressés chacun) sont dans `DECORS.DAT`, écrit en secteurs bruts à partir de la piste 21.
+  - À chaque niveau, le jeu les lit secteur par secteur avec la routine `DKCO` du moniteur.
+  - Il les charge dans la copie de l'aire de jeu, libre à ce moment-là, puis les décompresse à l'écran.
+  - En cas d'erreur de lecture, il garde le décor du niveau 1.
 
 Pièges rencontrés, utiles pour d'autres projets TO9 :
 
@@ -95,7 +100,7 @@ Pièges rencontrés, utiles pour d'autres projets TO9 :
 
 ![Sprites](apercus/planche_sprites.png)
 
-![Décors](apercus/decors.png)
+![Les 5 niveaux](apercus/niveaux.png)
 
 ## Licence
 

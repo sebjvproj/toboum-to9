@@ -1,5 +1,8 @@
 """Crée une disquette Thomson DOS (.fd, 80 pistes x 16 secteurs x 256 octets).
-Usage : python3 make_fd.py PROG.BIN sortie.fd   (repris de TOetris, nom du programme = nom du .BIN)"""
+Usage : python3 make_fd.py PROG.BIN sortie.fd [DONNEES.DAT]
+(repris de TOetris ; nom du programme = nom du .BIN). Le fichier de données éventuel est
+placé en premier, à partir de la piste 21 secteur 1, en secteurs bruts de 256 octets :
+le programme le lit directement secteur par secteur (routine DKCO du moniteur)."""
 import sys, datetime
 
 TRACKS, SECT, SSIZE = 80, 16, 256
@@ -45,6 +48,31 @@ def add_file(name, ext, ftype, flag, data, comment=b''):
     e[16:24] = comment.ljust(8)[:8]
     e[24], e[25], e[26] = d.day, d.month, d.year % 100
     directory.append(bytes(e))
+
+def add_raw_file(name, ext, data, comment=b''):
+    """fichier lu secteur par secteur par le programme : 256 octets utiles par secteur,
+    blocs contigus (la FAT le marque occupé pour que le DOS n'écrive pas dessus)"""
+    nsec = max(1, (len(data) + SSIZE - 1) // SSIZE)
+    nblk = (nsec + 7) // 8
+    blocks = list(range(next_block[0], next_block[0] + nblk)); next_block[0] += nblk
+    for i, blk in enumerate(blocks):
+        track, first = blk // 2, 1 + 8 * (blk % 2)
+        for k in range(8):
+            chunk = data[(i * 8 + k) * SSIZE:(i * 8 + k + 1) * SSIZE]
+            if chunk: put_sector(track, first + k, chunk)
+        fat[1 + blk] = blocks[i + 1] if i < nblk - 1 else 0xC0 + (nsec - 8 * i)
+    d = datetime.date.today()
+    e = bytearray(b'\x00' * 32)
+    e[0:8] = name.ljust(8).encode()[:8]; e[8:11] = ext.ljust(3).encode()[:3]
+    e[11] = 1; e[12] = 0; e[13] = blocks[0]; e[14], e[15] = 0, 255
+    e[16:24] = comment.ljust(8)[:8]
+    e[24], e[25], e[26] = d.day, d.month, d.year % 100
+    directory.append(bytes(e))
+    return blocks[0]
+
+if len(sys.argv) > 3:                     # données d'abord : position fixe (piste 21)
+    premier = add_raw_file('DECORS', 'DAT', open(sys.argv[3], 'rb').read(), b'DECORS')
+    assert premier == 42, 'les données doivent commencer piste 21 secteur 1'
 
 binary = open(sys.argv[1], 'rb').read()
 add_file(NAME, 'BIN', 2, 0x00, binary, NAME.encode())

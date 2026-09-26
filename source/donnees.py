@@ -10,7 +10,8 @@ import lz as LZ                                    # compression des écrans
 from police import F                               # police 3x5
 DECORS = os.path.join(HERE, '..', 'graphismes', 'decors')
 
-DECOR = sys.argv[1] if len(sys.argv) > 1 else 'egypte'
+TOUS_DECORS = ['egypte', 'rome', 'moscou', 'paris', 'mont_st_michel']   # un par niveau, en boucle
+DECOR = sys.argv[1] if len(sys.argv) > 1 else 'egypte'                  # décor du niveau 1
 BUF_ROWB = 29                                      # octets par ligne et par banque dans la copie du décor
 BLANC, JAUNE = SP.CODE['w'], SP.CODE['y']
 
@@ -94,26 +95,48 @@ def miroir(g): return [list(reversed(r)) for r in g]
 if __name__ == '__main__':
     os.chdir(HERE)
     for x, y in BOMBES: assert x % 4 == 0, 'bombes sur une paire paire (x multiple de 4)'
-    px, lv = charge_decor(DECOR)
-    for p in PLATEFORMES: plateforme(px, *p)
-    for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
-        texte(px, 131, y, t, JAUNE)
-    out = ["* Généré par donnees.py - ne pas éditer", f"* décor : {DECOR}"]
+    def compose(nom):
+        """décor + plateformes + textes du panneau -> (pixels, palette TO9 32 octets, LZ banque A, LZ banque B)"""
+        px, lv = charge_decor(nom)
+        for p in PLATEFORMES: plateforme(px, *p)
+        for t, y in (('SCORE', 12), ('RECORD', 50), ('VIES', 90), ('NIVEAU', 130)):
+            texte(px, 131, y, t, JAUNE)
+        pal = bytearray()
+        for r, g, b in lv: pal += bytes([(g << 4) | r, b])
+        A = bytearray(); B = bytearray()
+        for y in range(200):
+            for k in range(40):
+                A.append(px[y][4 * k] << 4 | px[y][4 * k + 1]); B.append(px[y][4 * k + 2] << 4 | px[y][4 * k + 3])
+        ca, cb = LZ.lz(bytes(A)), LZ.lz(bytes(B))
+        assert LZ.unlz(ca, 8000) == bytes(A) and LZ.unlz(cb, 8000) == bytes(B)
+        print(f'décor {nom} : {len(ca) + len(cb)} octets compressés')
+        return px, bytes(pal), ca, cb
+    out = ["* Généré par donnees.py - ne pas éditer"]
     def db(label, data, per=16):
         if label: out.append(label)
         for i in range(0, len(data), per):
             out.append("        FCB " + ",".join(f"${b:02X}" for b in data[i:i + per]))
-    pal = []
-    for r, g, b in lv: pal += [(g << 4) | r, b]
+    # décor du niveau 1 : dans le programme ; les autres : sur la disquette (DECORS.DAT)
+    ORDRE = [DECOR] + [n for n in TOUS_DECORS if n != DECOR]
+    decors_px = {}
+    px, pal, ca, cb = compose(DECOR); decors_px[DECOR] = px
+    out.append(f"* décor du niveau 1 : {DECOR}")
     db("PALETTE", pal, 8)
-    A = bytearray(); B = bytearray()
-    for y in range(200):
-        for k in range(40):
-            A.append(px[y][4 * k] << 4 | px[y][4 * k + 1]); B.append(px[y][4 * k + 2] << 4 | px[y][4 * k + 3])
-    ca, cb = LZ.lz(bytes(A)), LZ.lz(bytes(B))
-    assert LZ.unlz(ca, 8000) == bytes(A) and LZ.unlz(cb, 8000) == bytes(B)
     db("LZ_DECOR_A", ca); db("LZ_DECOR_B", cb)
-    print(f'décor {DECOR} : {len(ca) + len(cb)} octets compressés')
+    # sur la disquette : par décor, palette (32) + position de la banque B (2) + LZ A + LZ B,
+    # à partir d'un début de secteur ; DECTAB = (1er secteur, nombre de secteurs) par décor
+    dat = bytearray(); tab = []
+    for nom in ORDRE[1:]:
+        pxd, pal, ca, cb = compose(nom); decors_px[nom] = pxd
+        blob = pal + (34 + len(ca)).to_bytes(2, 'big') + ca + cb
+        blob += bytes(-len(blob) % 256)
+        tab += [len(dat) // 256, len(blob) // 256]; dat += blob
+    assert len(dat) // 256 < 256 and max(tab[1::2]) * 256 <= 10672, 'un décor doit tenir dans la copie de l\'aire de jeu'
+    open('DECORS.DAT', 'wb').write(dat)
+    out.append(f"NDECOR  EQU     {len(ORDRE)}")
+    out.append("DATTRK  EQU     21              ; DECORS.DAT commence piste 21 secteur 1 (make_fd.py)")
+    out.append("* décors des niveaux 2, 3... : " + ", ".join(ORDRE[1:]))
+    db("DECTAB", tab, 8)
     # plateformes : paire de début, paire de fin (exclue), ligne du dessus
     out.append(f"NPLAT   EQU     {len(PLATEFORMES)}")
     db("PLATS", sum([[x // 2, (x + w) // 2, y] for x, y, w in PLATEFORMES], []), 12)
@@ -152,5 +175,5 @@ if __name__ == '__main__':
     out.append("        RTS")
     out.append(f"BUFROW  EQU     {BUF_ROWB}")
     open('toboum_data.asm', 'w').write("\n".join(out) + "\n")
-    json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'decor': px},
-              open('toboum_niveau.json', 'w'))
+    json.dump({'plateformes': PLATEFORMES, 'bombes': BOMBES, 'depart': DEPART, 'decor': decors_px[DECOR],
+               'ordre': ORDRE, 'decors': decors_px}, open('toboum_niveau.json', 'w'))

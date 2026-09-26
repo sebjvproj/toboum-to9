@@ -44,7 +44,7 @@ class Cfg(BaseConfig):
     RAM_START = 0; RAM_END = 0xFFFF; ROM_START = 0x10000; ROM_END = 0x10000
 
 class TO9:
-    def __init__(self, binpath, joystick=True, vsync_ok=True, mon_overhead=60, timept=True):
+    def __init__(self, binpath, joystick=True, vsync_ok=True, mon_overhead=60, timept=True, fd=None):
         self.prc = 0x01
         self.tcr = 0; self.tlatch = 0xFFFF; self.next_irq = None
         self.mon_overhead = mon_overhead      # cycles supposés du gestionnaire d'IRQ du moniteur
@@ -80,6 +80,9 @@ class TO9:
         self.mem.ram[0xE830] = 0x3B   # sortie d'IRQ du moniteur : RTI
         self.mem.ram[0xE803] = 0x39   # RTS
         self.mem.ram[0xE806] = 0x39
+        self.mem.ram[0xE82A] = 0x39   # DKCO (disquette) : simulée ci-dessous, puis RTS
+        self.fd = open(fd, 'rb').read() if fd else None      # image .fd du lecteur 0
+        self.dk_reads = []
         self.cpu.system_stack_pointer.set(0x9F00)
         self.cpu.program_counter.set(self.entry)
         self.cpu.cc.set(0x00) if hasattr(self.cpu, 'cc') else None
@@ -167,6 +170,16 @@ class TO9:
                 cpu.accu_b.set(self.pending.pop(0) if self.pending else 0)
             elif pc == 0xE803:
                 self.putc.append(cpu.accu_b.value)
+            elif pc == 0xE82A:                         # DKCO : lecture d'un secteur (opération 2)
+                r = self.mem.ram
+                op, drv, trk, sec, buf = r[0x6048], r[0x6049], r[0x604A] << 8 | r[0x604B], r[0x604C], r[0x604F] << 8 | r[0x6050]
+                ok = self.fd is not None and op == 2 and drv == 0 and trk < 80 and 1 <= sec <= 16
+                if ok:
+                    o = (trk * 16 + sec - 1) * 256
+                    for i in range(256): self.mem.write_byte(buf + i, self.fd[o + i])
+                    self.dk_reads.append((trk, sec, buf))
+                cpu.C = 0 if ok else 1                  # C = 1 : erreur
+                cpu.cycles += 20000 if ok else 100      # (une lecture prend du temps)
             cpu.get_and_call_next_op()
             if self.beam is not None:                 # image vue par le faisceau, ligne par ligne
                 line = (cpu.cycles % CYC_FRAME) // CYC_LINE
