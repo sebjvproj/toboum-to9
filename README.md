@@ -1,8 +1,8 @@
-# TOboum — un jeu inspiré de Bomb Jack pour Thomson TO9
+# TOboum — un jeu inspiré de Bomb Jack pour Thomson TO8, TO9 et TO9+
 
-Un jeu de plates-formes inspiré de **Bomb Jack** (Tehkan, 1984). Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau, de préférence dans l'ordre où elles s'allument, en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs, et testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
+Un jeu de plates-formes inspiré de **Bomb Jack** (Tehkan, 1984). Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau, de préférence dans l'ordre où elles s'allument, en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs. Il tourne aussi sur **TO8** et **TO9+**. Il a été testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
 
-*A Bomb Jack-inspired platform game for the Thomson TO9 8-bit computer, written in 6809 assembly (French UI).*
+*A Bomb Jack-inspired platform game for the Thomson TO8, TO9 and TO9+ 8-bit computers, written in 6809 assembly (French UI).*
 
 Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropic) : moteur 6809, sprites, outils, simulateur et tests. Les décors ont été générés par un modèle d'image à partir de descriptions en texte ([graphismes/PROMPTS.md](graphismes/PROMPTS.md)), puis convertis pour le TO9.
 *Entirely vibe-coded with Claude.*
@@ -20,9 +20,9 @@ Le jeu a été entièrement vibecodé avec [Claude](https://claude.ai) (Anthropi
 
 Téléchargez `TOBOUM.fd` depuis la page [Releases](../../releases) (ou construisez-la, voir plus bas).
 
-1. Dans DCMOTO, choisissez la machine **TO9**, puis *Supports amovibles > Disquettes > Charger* `TOBOUM.fd`.
-2. Redémarrez le TO9.
-3. Dans le menu du TO9, choisissez **3 - BASIC 128**, puis tapez `RUN"TOBOUM"`.
+1. Dans DCMOTO, choisissez la machine **TO9**, **TO8** ou **TO9+**, puis *Supports amovibles > Disquettes > Charger* `TOBOUM.fd`.
+2. Redémarrez, puis choisissez au menu **3 - BASIC 128** sur TO9, ou le **BASIC 512** sur TO8 et TO9+.
+3. Tapez `RUN"TOBOUM"`.
 4. L'écran titre affiche le record : appuyez sur une touche (ou le bouton de la manette) pour jouer.
 
 | Touche | Effet |
@@ -105,6 +105,7 @@ Le TO9 affiche 50 images par seconde : seules 50, 25 ou 16,7 images/s donnent un
 
 Pièges rencontrés, utiles pour d'autres projets TO9 :
 
+- **La palette du TO9 est décalée** : la couleur k se programme dans l'entrée k xor 8, ce qui n'est pas le cas sur TO8 et TO9+. L'octet `$FFF0` de la ROM identifie la machine (TO9 : 2, TO8 : 3, TO9+ : 6) ; le jeu s'adapte au démarrage.
 - **Le 6846 ne garde qu'une interruption en attente.** Masquer les interruptions plus longtemps qu'une période du timer en fait perdre une, et l'horloge comme le son se décalent.
 - **Le port B du PIA jeux doit être mis en sortie** (registre de direction) pour que le CNA produise un son.
 - **`LDD` recharge A et B** : il ne faut pas compter les tours d'une boucle dans B si elle contient un `LDD`.
