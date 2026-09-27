@@ -44,8 +44,9 @@ class Cfg(BaseConfig):
     RAM_START = 0; RAM_END = 0xFFFF; ROM_START = 0x10000; ROM_END = 0x10000
 
 class TO9:
-    def __init__(self, binpath, joystick=True, vsync_ok=True, mon_overhead=60, timept=True, fd=None):
+    def __init__(self, binpath, joystick=True, vsync_ok=True, mon_overhead=60, timept=True, fd=None, machine='TO9'):
         self.prc = 0x01
+        self.machine = machine                # 'TO9', 'TO8' ou 'TO9+' (octet $FFF0 de la ROM, palette)
         self.tcr = 0; self.tlatch = 0xFFFF; self.next_irq = None
         self.mon_overhead = mon_overhead      # cycles supposés du gestionnaire d'IRQ du moniteur
         self.timept = timept                  # le moniteur appelle-t-il TIMEPT ?
@@ -78,6 +79,7 @@ class TO9:
         if not timept: stub = [0x3B]
         self.mem.ram[0xF000:0xF000+len(stub)] = bytes(stub)
         self.mem.ram[0xE830] = 0x3B   # sortie d'IRQ du moniteur : RTI
+        self.mem.ram[0xFFF0] = {'TO9': 2, 'TO8': 3, 'TO9+': 6}[machine]   # identification (relevée dans DCMOTO)
         self.mem.ram[0xE803] = 0x39   # RTS
         self.mem.ram[0xE806] = 0x39
         self.mem.ram[0xE82A] = 0x39   # DKCO (disquette) : simulée ci-dessous, puis RTS
@@ -216,7 +218,7 @@ class TO9:
         lv = [round(255 * (v / 15) ** (1 / 2.8)) for v in range(16)]
         out = []
         for n in range(16):
-            k = n ^ 8                                  # TO9 : entrée k -> couleur k xor 8 (MAME)
+            k = n ^ 8 if self.machine == 'TO9' else n   # TO9 : entrée k -> couleur k xor 8 (MAME) ; pas sur TO8/TO9+
             lo, hi = self.paldata[2 * k], self.paldata[2 * k + 1]
             out.append((lv[lo & 15], lv[lo >> 4], lv[hi & 15]))
         return out

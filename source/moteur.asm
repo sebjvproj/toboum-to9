@@ -397,7 +397,8 @@ SB2     LDA     ,X+
 SETPAL  CLR     PALIDX
         CLRB
 SP1     PSHS    B
-        EORB    #8              ; le TO9 range l'entrée k dans la couleur k xor 8
+        EORB    PALX            ; le TO9 range l'entrée k dans la couleur k xor 8 (PALX = 8) ;
+*                                 pas les TO8 et TO9+ (PALX = 0)
         ASLB
         LDX     PALPTR          ; palette courante (16 x 2 octets)
         ABX

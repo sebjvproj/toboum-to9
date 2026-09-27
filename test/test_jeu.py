@@ -447,5 +447,17 @@ s.key(ord('f')); s.run_frames(25)
 v3 = ips(s)
 check(v1 == 25 and v2 == 50 and v3 == 25, f"cadence fixe {v1} images/s ; F : libre {v2} ; F : fixe {v3}")
 
+# 21. TO8 et TO9+ : pas de décalage de palette (seul le TO9 range la couleur k en k xor 8)
+def rendu(m):
+    s = TO9('TOBOUM.BIN', fd='TOBOUM.fd', machine=m); s.run_frames(100)
+    def img():
+        pal = s.palette_rgb(); A, B = s.mem.vram
+        return [pal[v] for y in range(200) for xb in range(40) for v in (A[y*40+xb] >> 4, A[y*40+xb] & 15, B[y*40+xb] >> 4, B[y*40+xb] & 15)]
+    t = img(); s.key(0x0D); s.run_frames(150)
+    return t, img(), s.peek(S['PALX'])
+r = {m: rendu(m) for m in ('TO9', 'TO8', 'TO9+')}
+check(r['TO9'][2] == 8 and all(r[m][2] == 0 and r[m][:2] == r['TO9'][:2] for m in ('TO8', 'TO9+')),
+      "TO8, TO9+ : mêmes couleurs que sur TO9 (écran titre et jeu)")
+
 print('\n' + ('TOUT EST OK' if not fails else f'{len(fails)} ÉCHEC(S)'))
 sys.exit(1 if fails else 0)

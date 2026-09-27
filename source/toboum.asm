@@ -26,6 +26,7 @@ JOYDIR  EQU     $E7CC           ; PIA jeux, port A : directions (0 = appuyé)
 DAC     EQU     $E7CD           ; port B : bits 0-5 = CNA, bit 6 = bouton manette 1
 JOYCRA  EQU     $E7CE
 DACCR   EQU     $E7CF
+MACHID  EQU     $FFF0           ; identification de la machine (ROM) : TO9 2, TO8 3, TO9+ 6
 PALDAT  EQU     $E7DA
 PALIDX  EQU     $E7DB
 VMODE   EQU     $E7DC
@@ -89,7 +90,12 @@ START   LDB     #$14            ; curseur invisible
         ORCC    #$50
         LDS     #$9FF0
         JSR     INITVARS
-        LDX     #PALNOIR        ; écran noir jusqu'au premier décor
+        LDA     MACHID          ; TO9 (2) : palette décalée de 8 ; TO8 (3), TO9+ (6)... : non
+        CMPA    #2
+        BNE     ST1
+        LDA     #8
+        STA     PALX
+ST1     LDX     #PALNOIR        ; écran noir jusqu'au premier décor
         STX     PALPTR
         LDA     #$7B
         STA     VMODE
@@ -2081,6 +2087,7 @@ CHAIN   RMB     1               ; bombes allumées ramassées dans ce niveau
 STATSH  RMB     8               ; panneau tel qu'affiché : score, record, vies, niveau
 SDX     RMB     1
 PWR     RMB     1               ; jauge (+1 bombe éteinte, +2 allumée ; pièce à PWRSEUIL)
+PALX    RMB     1               ; 8 sur TO9 (palette décalée), 0 sinon
 GOD     RMB     1               ; mode invincible
 FPSLIB  RMB     1               ; 1 : cadence libre (touche F)
 GODUSED RMB     1               ; ... utilisé pendant cette partie (pas de record)
