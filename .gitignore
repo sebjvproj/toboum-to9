@@ -10,3 +10,8 @@ __pycache__/
 # image source de apercus/boite.jpg, et fichiers de zone Windows
 pack.png
 *:Zone.Identifier
+
+# outil de mesure test/compteur (construit à la main)
+test/compteur/*.BIN
+test/compteur/*.fd
+test/compteur/*.lst
