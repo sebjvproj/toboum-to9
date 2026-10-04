@@ -1,6 +1,6 @@
 # TOboum — un jeu inspiré de Bomb Jack pour Thomson TO8, TO9 et TO9+
 
-**Pour jouer sans connaître GitHub : [la page de présentation](https://sebjvproj.github.io/toboum-to9/), avec la disquette à télécharger et le mode d'emploi pas à pas.**
+**Pour jouer sans connaître GitHub : [la page de présentation](https://sebjvproj.github.io/toproj/toboum/), avec la disquette à télécharger et le mode d'emploi pas à pas.**
 
 Un jeu de plates-formes inspiré de **Bomb Jack** (Tehkan, 1984). Toto porte une casquette à hélice. Il doit ramasser les 18 bombes de chaque niveau, de préférence dans l'ordre où elles s'allument, en évitant robots, chauves-souris, boules à pics et nuages en colère. Le jeu est écrit entièrement en assembleur 6809 pour le **Thomson TO9** (1985), en 160 × 200 pixels et 16 couleurs. Il tourne aussi sur **TO8** et **TO9+**. Il a été testé dans l'émulateur [DCMOTO](http://dcmoto.free.fr/).
 
